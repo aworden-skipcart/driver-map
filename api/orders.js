@@ -3,9 +3,14 @@
 // GET /api/orders?hours=12&regionId=58
 // Required header: X-Usertoken: <JWT from /api/auth>
 //
-// Pulls New ezCater orders for the next 12/24 hours, then enriches each order
-// with pickup/dropoff coordinates from /v2api/steps/{JobId} so the browser can
-// map pickup pins and draw pickup-to-delivery route lines on click.
+// Pulls New ezCater orders for a true rolling next 12/24 hours window, then
+// enriches each order with pickup/dropoff coordinates from /v2api/steps/{JobId}
+// so the browser can map pickup pins and draw pickup-to-delivery route lines.
+//
+// Important: Skipcart can return date-bucket spillover depending on how the
+// dispatch search interprets deliverywindowrange. We therefore apply a second
+// server-side hard cap after search so the 24-hour view never includes orders
+// later than exactly now + 24 hours.
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -41,6 +46,8 @@ export default async function handler(req, res) {
 
   const now = new Date();
   const end = new Date(now.getTime() + hours * 60 * 60 * 1000);
+  const windowStartMs = now.getTime();
+  const windowEndMs = end.getTime();
   const pageSize = 75;
   const maxPages = 8; // hard cap safety; 600 orders max before enrichment
 
@@ -108,7 +115,11 @@ export default async function handler(req, res) {
       ? allOrders.filter(o => String(o.RegionName || '').toLowerCase() === requestedRegionName.toLowerCase())
       : allOrders;
 
-    const enriched = await mapLimit(regionFiltered, 6, async (order) => {
+    // Hard rolling-window filter. This prevents the Orders/search endpoint from
+    // returning tomorrow/end-of-day records outside the selected 12/24h window.
+    const windowFiltered = regionFiltered.filter(order => isOrderInsideWindow(order, windowStartMs, windowEndMs));
+
+    const enriched = await mapLimit(windowFiltered, 6, async (order) => {
       const jobId = order.JobId || order.jobId;
       if (!jobId) return normalizeOrder(order, null);
       try {
@@ -129,12 +140,63 @@ export default async function handler(req, res) {
       hours,
       totalFound: allOrders.length,
       totalAfterRegionFilter: regionFiltered.length,
+      totalInsideWindow: windowFiltered.length,
+      windowStart: now.toISOString(),
+      windowEnd: end.toISOString(),
       orders: enriched
     });
   } catch (err) {
     console.error('[orders] proxy error:', err);
     return res.status(err.status || 502).json({ error: err.message || 'Could not reach orders API', upstream: err.upstream || null });
   }
+}
+
+
+function isOrderInsideWindow(order, startMs, endMs) {
+  const orderMs = getOrderWindowStartMs(order);
+  if (!Number.isFinite(orderMs)) return false;
+  return orderMs >= startMs && orderMs <= endMs;
+}
+
+function getOrderWindowStartMs(order) {
+  const candidates = [
+    order?.DelWindowStartString,
+    order?.DelWindowStart,
+    order?.delWindowStartString,
+    order?.delWindowStart,
+    order?.PickupWindowStart,
+    order?.PickupWindowStartString,
+    order?.DeliveryWindowStart,
+    order?.DeliveryWindowStartString
+  ];
+
+  for (const value of candidates) {
+    const ms = parseSkipcartDateMs(value);
+    if (Number.isFinite(ms)) return ms;
+  }
+  return NaN;
+}
+
+function parseSkipcartDateMs(value) {
+  if (!value) return NaN;
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === 'number') return value;
+
+  const raw = String(value).trim();
+  if (!raw) return NaN;
+
+  // Skipcart commonly sends both "2026-05-12T18:36:00" and
+  // "2026-05-12T18:36:00Z". Prefer the explicit value, then try appending Z
+  // so date-only/no-zone values are still compared consistently on Vercel.
+  const direct = Date.parse(raw);
+  if (Number.isFinite(direct)) return direct;
+
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?$/.test(raw)) {
+    const asUtc = Date.parse(raw + 'Z');
+    if (Number.isFinite(asUtc)) return asUtc;
+  }
+
+  return NaN;
 }
 
 function makeHeaders(appToken, userToken, isJson) {
