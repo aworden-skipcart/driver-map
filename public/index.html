@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Skipcart Driver Map</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800;900&family=Barlow:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #020617;
+    --panel:    #080f24;
+    --panel-2:  #0c1530;
+    --border:   #0f2040;
+    --border2:  #1a3050;
+    --cyan:     #00CCFF;
+    --cyan-dim: rgba(0,204,255,0.1);
+    --text:     #CBD5E1;
+    --muted:    #4A7C94;
+    --white:    #ffffff;
+    --danger:   #F87171;
+    --danger-bg:rgba(248,113,113,0.08);
+    --success:  #4ade80;
+    --on-job:   #f59e0b;
+    --offline:  #6b7280;
+  }
+
+  html, body { height: 100%; background: var(--bg); font-family: 'Barlow', sans-serif; color: var(--text); -webkit-font-smoothing: antialiased; }
+  body { overflow: hidden; }
+
+  .login-bg::before {
+    content: ''; position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(0,204,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,204,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px; pointer-events: none; z-index: 0;
+  }
+  .login-bg::after {
+    content: ''; position: fixed; top: -200px; left: 50%;
+    transform: translateX(-50%); width: 600px; height: 600px;
+    background: radial-gradient(circle, rgba(0,204,255,0.06) 0%, transparent 70%);
+    pointer-events: none; z-index: 0;
+  }
+
+  #loginScreen { position: relative; z-index: 1; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; }
+
+  .logo-area { text-align: center; margin-bottom: 32px; animation: fadeDown 0.5s ease forwards; }
+  .logo-area img { height: 44px; display: inline-block; filter: brightness(0) invert(1); opacity: 0.9; }
+  .logo-sub { margin-top: 10px; font-family: 'Barlow Condensed', sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 0.25em; text-transform: uppercase; color: var(--cyan); opacity: 0.7; }
+
+  .login-card { width: 100%; max-width: 380px; background: var(--panel); border: 1px solid var(--border2); border-radius: 16px; overflow: hidden; box-shadow: 0 0 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(0,204,255,0.05); animation: fadeUp 0.5s ease 0.1s both; }
+  .card-header { background: linear-gradient(135deg, rgba(0,204,255,0.12), rgba(0,204,255,0.04)); border-bottom: 1px solid var(--border2); padding: 16px 24px; text-align: center; }
+  .card-header-title { font-family: 'Barlow Condensed', sans-serif; font-size: 13px; font-weight: 800; letter-spacing: 0.22em; text-transform: uppercase; color: var(--cyan); }
+  .card-body { padding: 28px 24px 24px; }
+
+  .field-group { margin-bottom: 18px; }
+  .field-label { display: block; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 7px; }
+  .form-control { display: block; width: 100%; height: 40px; padding: 0 12px; font-size: 13px; font-family: 'Barlow', sans-serif; color: var(--text); background: rgba(0,0,0,0.3); border: 1px solid var(--border2); border-radius: 8px; outline: none; transition: border-color .15s, box-shadow .15s; }
+  .form-control::placeholder { color: var(--muted); opacity: 0.6; }
+  .form-control:focus { border-color: rgba(0,204,255,0.4); box-shadow: 0 0 0 3px rgba(0,204,255,0.08); }
+
+  .password-wrapper { position: relative; }
+  .password-wrapper .form-control { padding-right: 40px; }
+  .toggle-pw { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--muted); cursor: pointer; padding: 4px; display: flex; align-items: center; }
+  .toggle-pw:hover { color: var(--cyan); }
+
+  .remember-row { display: flex; align-items: center; gap: 8px; margin-bottom: 22px; }
+  .remember-row input[type=checkbox] { width: 15px; height: 15px; accent-color: var(--cyan); cursor: pointer; }
+  .remember-row label { font-size: 12px; color: var(--muted); cursor: pointer; user-select: none; }
+
+  .btn-login { display: block; width: 100%; height: 42px; background: var(--cyan); color: #020617; border: none; border-radius: 8px; font-family: 'Barlow Condensed', sans-serif; font-size: 14px; font-weight: 800; letter-spacing: 0.15em; text-transform: uppercase; cursor: pointer; position: relative; transition: opacity .15s, transform .1s; }
+  .btn-login:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
+  .btn-login:active:not(:disabled) { transform: translateY(0); }
+  .btn-login:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-login .spinner { display: none; width: 16px; height: 16px; border: 2px solid rgba(2,6,23,0.3); border-top-color: #020617; border-radius: 50%; animation: spin .7s linear infinite; position: absolute; left: 50%; top: 50%; margin: -8px 0 0 -8px; }
+  .btn-login.loading .spinner { display: block; }
+  .btn-login.loading .btn-text { opacity: 0; }
+
+  .alert-danger { background: var(--danger-bg); border: 1px solid rgba(248,113,113,0.25); color: var(--danger); border-radius: 8px; padding: 10px 12px; font-size: 12px; margin-top: 14px; display: none; line-height: 1.5; }
+  .alert-danger.show { display: block; }
+
+  .card-footer { text-align: center; padding: 12px 24px 20px; border-top: 1px solid var(--border); }
+  .trouble-btn { background: none; border: none; color: var(--muted); font-size: 11px; font-family: 'Barlow', sans-serif; cursor: pointer; transition: color .15s; }
+  .trouble-btn:hover { color: var(--cyan); }
+  .version-text { font-size: 10px; color: var(--border2); margin-top: 6px; font-family: 'DM Mono', monospace; }
+
+  #appScreen { display: none; height: 100vh; }
+  body.app-mode #appScreen { display: grid; grid-template-columns: 320px 1fr; }
+  body.app-mode #loginScreen { display: none; }
+
+  #sidebar { background: var(--panel); border-right: 1px solid var(--border2); overflow-y: auto; display: flex; flex-direction: column; }
+  .topbar { padding: 14px 18px; border-bottom: 1px solid var(--border2); display: flex; align-items: center; justify-content: space-between; background: linear-gradient(135deg, rgba(0,204,255,0.06), transparent); }
+  .topbar-title { font-family: 'Barlow Condensed', sans-serif; font-size: 13px; font-weight: 800; letter-spacing: 0.2em; text-transform: uppercase; color: var(--cyan); }
+  .topbar-sub { font-size: 10px; color: var(--muted); font-family: 'DM Mono', monospace; margin-top: 2px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .logout-btn { background: none; border: 1px solid var(--border2); color: var(--muted); border-radius: 6px; padding: 5px 9px; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; font-family: 'Barlow Condensed', sans-serif; transition: all .15s; }
+  .logout-btn:hover { color: var(--danger); border-color: rgba(248,113,113,0.3); }
+
+  .sidebar-body { padding: 16px 18px; flex: 1; }
+  .section { margin-bottom: 18px; padding-bottom: 18px; border-bottom: 1px solid var(--border); }
+  .section:last-child { border-bottom: none; }
+  .section-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.15em; color: var(--muted); margin-bottom: 10px; font-weight: 700; font-family: 'Barlow Condensed', sans-serif; }
+
+  .app-label { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 5px; font-weight: 700; }
+  .app-input, .app-select { width: 100%; height: 34px; padding: 0 10px; background: rgba(0,0,0,0.3); border: 1px solid var(--border2); border-radius: 6px; color: var(--text); font-size: 12px; font-family: 'Barlow', sans-serif; outline: none; transition: border-color .15s; }
+  .app-input:focus, .app-select:focus { border-color: rgba(0,204,255,0.4); }
+  .app-select { appearance: none; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='%234A7C94' d='M0 0l5 6 5-6z'/></svg>"); background-repeat: no-repeat; background-position: right 10px center; padding-right: 26px; }
+
+  .app-btn { width: 100%; height: 34px; background: var(--cyan-dim); border: 1px solid rgba(0,204,255,0.3); color: var(--cyan); border-radius: 6px; font-family: 'Barlow Condensed', sans-serif; font-size: 12px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; cursor: pointer; margin-top: 8px; transition: all .15s; }
+  .app-btn:hover { background: var(--cyan); color: #020617; }
+  .app-btn.secondary { background: transparent; border-color: var(--border2); color: var(--muted); }
+  .app-btn.secondary:hover { color: var(--text); border-color: var(--cyan); background: transparent; }
+
+  .checkbox-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; font-size: 12px; cursor: pointer; user-select: none; }
+  .checkbox-row input { width: 14px; height: 14px; accent-color: var(--cyan); cursor: pointer; }
+
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .stat { background: var(--panel-2); border: 1px solid var(--border); padding: 10px; border-radius: 6px; }
+  .stat-value { font-size: 18px; font-weight: 700; color: var(--white); font-family: 'Barlow Condensed', sans-serif; }
+  .stat-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-top: 2px; }
+
+  .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+  .dot-online { background: var(--success); }
+  .dot-offline { background: var(--offline); }
+  .dot-on-job { background: var(--on-job); }
+
+  .legend { background: var(--panel-2); border: 1px solid var(--border); padding: 10px; border-radius: 6px; font-size: 12px; }
+  .legend-item { display: flex; align-items: center; margin: 4px 0; color: var(--text); }
+
+  .status-msg { font-size: 11px; padding: 8px 10px; border-radius: 6px; margin-top: 8px; display: none; line-height: 1.4; }
+  .status-msg.success { background: rgba(74,222,128,0.1); color: var(--success); border: 1px solid rgba(74,222,128,0.2); display: block; }
+  .status-msg.error { background: var(--danger-bg); color: var(--danger); border: 1px solid rgba(248,113,113,0.25); display: block; }
+  .status-msg.info { background: var(--cyan-dim); color: var(--cyan); border: 1px solid rgba(0,204,255,0.2); display: block; }
+
+  #map { width: 100%; height: 100%; background: var(--bg); }
+
+  .leaflet-popup-content-wrapper { border-radius: 8px; background: var(--panel); color: var(--text); border: 1px solid var(--border2); }
+  .leaflet-popup-tip { background: var(--panel); border: 1px solid var(--border2); }
+  .leaflet-popup-content { margin: 12px 14px; font-family: 'Barlow', sans-serif; }
+  .popup-content { font-size: 12px; min-width: 220px; }
+  .popup-name { font-size: 14px; font-weight: 700; color: var(--white); margin-bottom: 4px; }
+  .popup-id { font-family: 'DM Mono', monospace; background: var(--panel-2); padding: 2px 6px; border-radius: 3px; font-size: 11px; color: var(--cyan); border: 1px solid var(--border2); }
+  .popup-row { margin: 4px 0; color: var(--text); }
+  .popup-row strong { color: var(--muted); font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; margin-right: 4px; }
+  .popup-status { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
+  .popup-status.online { background: rgba(74,222,128,0.15); color: var(--success); }
+  .popup-status.offline { background: rgba(107,114,128,0.2); color: #9ca3af; }
+  .popup-status.on-job { background: rgba(245,158,11,0.15); color: var(--on-job); }
+
+  .marker-cluster-small, .marker-cluster-medium, .marker-cluster-large { background: rgba(0,204,255,0.2); }
+  .marker-cluster-small div, .marker-cluster-medium div, .marker-cluster-large div { background: rgba(0,204,255,0.6); color: #020617; font-family: 'Barlow Condensed', sans-serif; font-weight: 800; }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes fadeDown { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+</style>
+</head>
+<body class="login-bg">
+
+<div id="loginScreen">
+  <div class="logo-area">
+    <img src="https://wlbhr.stripocdn.email/content/guids/CABINET_c526811c74c3ce1f43298430907f199d8b157608780978a27c52032a074479af/images/skipcartnewbluenoshadow_1.png" alt="Skipcart">
+    <div class="logo-sub">Driver Map</div>
+  </div>
+
+  <div class="login-card">
+    <div class="card-header"><div class="card-header-title">Sign In</div></div>
+    <div class="card-body">
+      <form id="loginForm" novalidate autocomplete="on">
+        <div class="field-group">
+          <label class="field-label" for="email">Email Address</label>
+          <input id="email" type="text" name="account_email" placeholder="dispatcher@skipcart.com" autocomplete="username" class="form-control" required>
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="password">Password</label>
+          <div class="password-wrapper">
+            <input id="password" type="password" name="account_password" placeholder="••••••••" autocomplete="current-password" class="form-control" required>
+            <button type="button" class="toggle-pw" id="togglePw">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="remember-row">
+          <input type="checkbox" id="remember" name="account_remember">
+          <label for="remember">Remember my email</label>
+        </div>
+        <button type="submit" class="btn-login" id="loginBtn">
+          <span class="btn-text">Login</span>
+          <span class="spinner"></span>
+        </button>
+        <div class="alert-danger" id="errorMsg"></div>
+      </form>
+    </div>
+    <div class="card-footer">
+      <button type="button" class="trouble-btn">Trouble logging in?</button>
+      <div class="version-text">driver-map v1.0</div>
+    </div>
+  </div>
+</div>
+
+<div id="appScreen">
+  <aside id="sidebar">
+    <div class="topbar">
+      <div>
+        <div class="topbar-title">Driver Map</div>
+        <div class="topbar-sub" id="userEmail">—</div>
+      </div>
+      <button class="logout-btn" id="logoutBtn">Logout</button>
+    </div>
+
+    <div class="sidebar-body">
+      <div class="section">
+        <div class="section-title">Region</div>
+        <label class="app-label" for="regionId">Region ID</label>
+        <input id="regionId" class="app-input" type="number" placeholder="e.g. 58" value="58" />
+        <button class="app-btn" id="loadBtn">Load Drivers</button>
+        <button class="app-btn secondary" id="refreshBtn" style="margin-top: 6px;">Refresh</button>
+        <div class="status-msg" id="statusMsg"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Filters</div>
+        <label class="checkbox-row"><input type="checkbox" id="filterOnline" checked> <span><span class="status-dot dot-online"></span>Online</span></label>
+        <label class="checkbox-row"><input type="checkbox" id="filterOnJob" checked> <span><span class="status-dot dot-on-job"></span>On Job</span></label>
+        <label class="checkbox-row"><input type="checkbox" id="filterOffline"> <span><span class="status-dot dot-offline"></span>Offline</span></label>
+
+        <label class="app-label" for="searchBox" style="margin-top: 12px;">Search</label>
+        <input id="searchBox" class="app-input" placeholder="ID, name, phone, zone..." />
+
+        <label class="app-label" for="zoneFilter" style="margin-top: 8px;">Zone</label>
+        <select id="zoneFilter" class="app-select"><option value="">All zones</option></select>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Stats</div>
+        <div class="stats">
+          <div class="stat"><div class="stat-value" id="statTotal">0</div><div class="stat-label">Total</div></div>
+          <div class="stat"><div class="stat-value" id="statShown">0</div><div class="stat-label">Shown</div></div>
+          <div class="stat"><div class="stat-value" id="statOnline">0</div><div class="stat-label">Online</div></div>
+          <div class="stat"><div class="stat-value" id="statOnJob">0</div><div class="stat-label">On Job</div></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Legend</div>
+        <div class="legend">
+          <div class="legend-item"><span class="status-dot dot-online"></span>Online — available</div>
+          <div class="legend-item"><span class="status-dot dot-on-job"></span>On Job — delivering</div>
+          <div class="legend-item"><span class="status-dot dot-offline"></span>Offline — last seen</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <div id="map"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<script>
+const Session = {
+  get token()       { return sessionStorage.getItem('sc_token'); },
+  get email()       { return sessionStorage.getItem('sc_email'); },
+  get name()        { return sessionStorage.getItem('sc_name'); },
+  get userToken()   { return sessionStorage.getItem('sc_user_token'); },
+  get userExpires() { return sessionStorage.getItem('sc_user_token_expires'); },
+  save(payload) {
+    sessionStorage.setItem('sc_token', payload.token);
+    sessionStorage.setItem('sc_email', payload.email || '');
+    if (payload.name)      sessionStorage.setItem('sc_name', payload.name);
+    if (payload.userToken) sessionStorage.setItem('sc_user_token', payload.userToken);
+    if (payload.userTokenExpires) sessionStorage.setItem('sc_user_token_expires', payload.userTokenExpires);
+  },
+  clear() {
+    ['sc_token','sc_email','sc_name','sc_user_token','sc_user_token_expires']
+      .forEach(k => sessionStorage.removeItem(k));
+  },
+  isValid() { return !!this.token; }
+};
+
+document.getElementById('togglePw').addEventListener('click', () => {
+  const pw = document.getElementById('password');
+  pw.type = pw.type === 'password' ? 'text' : 'password';
+});
+
+(function restoreRemembered() {
+  const saved = localStorage.getItem('sc_remember_email');
+  if (saved) {
+    document.getElementById('email').value = saved;
+    document.getElementById('remember').checked = true;
+  }
+})();
+
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email    = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value;
+  const remember = document.getElementById('remember').checked;
+  const btn      = document.getElementById('loginBtn');
+  const errEl    = document.getElementById('errorMsg');
+
+  if (!email || !password) {
+    errEl.textContent = 'Please enter your email and password.';
+    errEl.classList.add('show');
+    return;
+  }
+
+  errEl.classList.remove('show');
+  btn.classList.add('loading');
+  btn.disabled = true;
+
+  try {
+    const res = await fetch('/api/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok || !data.token) throw new Error(data.error || 'Login failed');
+
+    Session.save(data);
+
+    if (remember) localStorage.setItem('sc_remember_email', email);
+    else          localStorage.removeItem('sc_remember_email');
+
+    enterApp();
+  } catch (err) {
+    errEl.textContent = err.message || 'Login failed. Please try again.';
+    errEl.classList.add('show');
+    btn.classList.remove('loading');
+    btn.disabled = false;
+  }
+});
+
+let map, cluster, allFeatures = [], allMarkers = [];
+
+function enterApp() {
+  document.body.classList.add('app-mode');
+  document.body.classList.remove('login-bg');
+  document.getElementById('userEmail').textContent = Session.name || Session.email || '';
+
+  if (!map) initMap();
+  bindAppEvents();
+  loadDrivers();
+}
+
+function logout() {
+  Session.clear();
+  document.getElementById('password').value = '';
+  document.getElementById('errorMsg').classList.remove('show');
+  document.getElementById('loginBtn').classList.remove('loading');
+  document.getElementById('loginBtn').disabled = false;
+  document.body.classList.remove('app-mode');
+  document.body.classList.add('login-bg');
+}
+
+function initMap() {
+  map = L.map('map', { preferCanvas: true }).setView([32.7767, -96.7970], 6);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; OpenStreetMap &copy; CARTO',
+    maxZoom: 19
+  }).addTo(map);
+
+  cluster = L.markerClusterGroup({
+    chunkedLoading: true,
+    spiderfyOnMaxZoom: true,
+    showCoverageOnHover: false,
+    maxClusterRadius: 50
+  });
+  map.addLayer(cluster);
+}
+
+function bindAppEvents() {
+  if (bindAppEvents._bound) return;
+  bindAppEvents._bound = true;
+
+  document.getElementById('loadBtn').addEventListener('click', loadDrivers);
+  document.getElementById('refreshBtn').addEventListener('click', loadDrivers);
+  document.getElementById('logoutBtn').addEventListener('click', logout);
+  ['filterOnline','filterOnJob','filterOffline','searchBox','zoneFilter'].forEach(id => {
+    const el = document.getElementById(id);
+    el.addEventListener('input', rebuildMarkers);
+    el.addEventListener('change', rebuildMarkers);
+  });
+}
+
+function setStatus(msg, kind) {
+  const el = document.getElementById('statusMsg');
+  el.textContent = msg;
+  el.className = 'status-msg ' + (kind || '');
+}
+
+function classify(p) {
+  const inJob  = String(p.In_Job).toLowerCase() === 'true';
+  const online = String(p.Is_Online).toLowerCase() === 'true';
+  if (inJob) return 'on-job';
+  if (online) return 'online';
+  return 'offline';
+}
+function colorFor(cls) { return cls === 'on-job' ? '#f59e0b' : cls === 'online' ? '#22c55e' : '#6b7280'; }
+
+function buildPopup(p) {
+  const cls = classify(p);
+  const label = cls === 'on-job' ? 'On Job' : cls === 'online' ? 'Online' : 'Offline';
+  const score = p.ScoreCard || {};
+  return `
+    <div class="popup-content">
+      <div class="popup-name">${p.Driver_Name || 'Unknown'}
+        <span class="popup-status ${cls}" style="margin-left:6px;">${label}</span>
+      </div>
+      <div class="popup-row"><strong>ID</strong> <span class="popup-id">${p.DriverId}</span></div>
+      <div class="popup-row"><strong>Phone</strong> ${p.Phone_Number || '—'}</div>
+      <div class="popup-row"><strong>Zone</strong> ${p.Zone_Name || '—'}</div>
+      <div class="popup-row"><strong>Region</strong> ${p.Region_Name || '—'}</div>
+      <div class="popup-row"><strong>Status</strong> ${p.Driver_Status || '—'}</div>
+      ${p.OrderId && p.OrderId !== '0' ? `<div class="popup-row"><strong>Order</strong> ${p.OrderId}</div>` : ''}
+      <div class="popup-row"><strong>Last Seen</strong> ${p.Last_Seen_Online || '—'}</div>
+      ${score.acceptanceRate !== undefined ? `<div class="popup-row"><strong>Accept</strong> ${score.acceptanceRate}% &nbsp; <strong>Complete</strong> ${score.completionRate}%</div>` : ''}
+      ${p.DriverCohorts && p.DriverCohorts.length ? `<div class="popup-row"><strong>Cohorts</strong> ${p.DriverCohorts.join(', ')}</div>` : ''}
+    </div>`;
+}
+
+function rebuildMarkers() {
+  cluster.clearLayers();
+  allMarkers = [];
+
+  const showOnline  = document.getElementById('filterOnline').checked;
+  const showOnJob   = document.getElementById('filterOnJob').checked;
+  const showOffline = document.getElementById('filterOffline').checked;
+  const search      = document.getElementById('searchBox').value.trim().toLowerCase();
+  const zone        = document.getElementById('zoneFilter').value;
+
+  let shown = 0, online = 0, onJob = 0;
+
+  for (const f of allFeatures) {
+    const p = f.properties;
+    const cls = classify(p);
+    if (cls === 'online') online++;
+    if (cls === 'on-job') onJob++;
+
+    if (cls === 'online' && !showOnline) continue;
+    if (cls === 'on-job' && !showOnJob) continue;
+    if (cls === 'offline' && !showOffline) continue;
+    if (zone && p.Zone_Name !== zone) continue;
+    if (search) {
+      const hay = [p.DriverId, p.Driver_Name, p.Phone_Number, p.Email, p.Zone_Name, p.OrderId].filter(Boolean).join(' ').toLowerCase();
+      if (!hay.includes(search)) continue;
+    }
+
+    const [lng, lat] = f.geometry.coordinates;
+    if (!isFinite(lat) || !isFinite(lng)) continue;
+
+    const marker = L.circleMarker([lat, lng], {
+      radius: cls === 'on-job' ? 8 : 6,
+      fillColor: colorFor(cls),
+      color: cls === 'on-job' ? '#fff' : colorFor(cls),
+      weight: cls === 'on-job' ? 2 : 1,
+      fillOpacity: 0.85
+    });
+    marker.bindPopup(buildPopup(p));
+    marker.bindTooltip(`#${p.DriverId} · ${p.Driver_Name || ''}`, { direction: 'top', offset: [0, -6] });
+    allMarkers.push(marker);
+    shown++;
+  }
+
+  cluster.addLayers(allMarkers);
+
+  document.getElementById('statTotal').textContent  = allFeatures.length.toLocaleString();
+  document.getElementById('statShown').textContent  = shown.toLocaleString();
+  document.getElementById('statOnline').textContent = online.toLocaleString();
+  document.getElementById('statOnJob').textContent  = onJob.toLocaleString();
+}
+
+function rebuildZoneFilter() {
+  const zones = new Set();
+  for (const f of allFeatures) if (f.properties.Zone_Name) zones.add(f.properties.Zone_Name);
+  const sorted = [...zones].sort();
+  const sel = document.getElementById('zoneFilter');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">All zones</option>' + sorted.map(z => `<option value="${z}">${z}</option>`).join('');
+  if (cur && sorted.includes(cur)) sel.value = cur;
+}
+
+function ingest(payload) {
+  let fc = payload;
+  if (payload && payload.result && payload.result.features) fc = payload.result;
+  if (!fc || !Array.isArray(fc.features)) throw new Error('No features in response');
+  allFeatures = fc.features;
+  rebuildZoneFilter();
+  rebuildMarkers();
+  if (allMarkers.length) {
+    const bounds = L.latLngBounds(allFeatures
+      .filter(f => f.geometry && f.geometry.coordinates)
+      .map(f => [f.geometry.coordinates[1], f.geometry.coordinates[0]]));
+    if (bounds.isValid()) map.fitBounds(bounds, { padding: [40, 40], maxZoom: 10 });
+  }
+}
+
+async function loadDrivers() {
+  if (!Session.isValid()) {
+    setStatus('Session expired. Please log in again.', 'error');
+    setTimeout(logout, 1200);
+    return;
+  }
+
+  setStatus('Loading…', 'info');
+  document.getElementById('loadBtn').disabled = true;
+  document.getElementById('refreshBtn').disabled = true;
+
+  try {
+    const regionId = document.getElementById('regionId').value.trim();
+    const url = '/api/drivers' + (regionId ? '?regionId=' + encodeURIComponent(regionId) : '');
+    const r = await fetch(url, {
+      headers: { 'X-Apptoken': Session.token, 'Accept': 'application/json' }
+    });
+    if (r.status === 401 || r.status === 403) throw new Error('Unauthorized — please log in again');
+    if (!r.ok) throw new Error('Request failed (' + r.status + ')');
+
+    const json = await r.json();
+    ingest(json);
+    setStatus(`Loaded ${allFeatures.length.toLocaleString()} drivers`, 'success');
+  } catch (e) {
+    console.error(e);
+    setStatus('Error: ' + e.message, 'error');
+    if (/unauthorized/i.test(e.message)) setTimeout(logout, 1500);
+  } finally {
+    document.getElementById('loadBtn').disabled = false;
+    document.getElementById('refreshBtn').disabled = false;
+  }
+}
+
+if (Session.isValid()) enterApp();
+</script>
+</body>
+</html>
