@@ -89,7 +89,7 @@
   .version-text { font-size: 10px; color: var(--border2); margin-top: 6px; font-family: 'DM Mono', monospace; }
 
   #appScreen { display: none; height: 100vh; }
-  body.app-mode #appScreen { display: grid; grid-template-columns: 320px 1fr; }
+  body.app-mode #appScreen { display: grid; grid-template-columns: 320px minmax(0, 1fr) 380px; }
   body.app-mode #loginScreen { display: none; }
 
   #sidebar { background: var(--panel); border-right: 1px solid var(--border2); overflow-y: auto; display: flex; flex-direction: column; }
@@ -136,6 +136,35 @@
   .status-msg.info { background: var(--cyan-dim); color: var(--cyan); border: 1px solid rgba(0,204,255,0.2); display: block; }
 
   #map { width: 100%; height: 100%; background: var(--bg); }
+
+  #ordersPanel { background: var(--panel); border-left: 1px solid var(--border2); overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
+  .orders-header { padding: 14px 16px; border-bottom: 1px solid var(--border2); background: linear-gradient(135deg, rgba(0,204,255,0.06), transparent); }
+  .orders-title { font-family: 'Barlow Condensed', sans-serif; font-size: 13px; font-weight: 800; letter-spacing: 0.2em; text-transform: uppercase; color: var(--cyan); }
+  .orders-sub { font-size: 10px; color: var(--muted); font-family: 'DM Mono', monospace; margin-top: 2px; }
+  .orders-controls { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .orders-list { flex: 1; overflow-y: auto; padding: 10px; }
+  .order-card { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin-bottom: 10px; cursor: pointer; transition: all .15s; }
+  .order-card:hover, .order-card.active { border-color: rgba(0,204,255,0.45); box-shadow: 0 0 0 1px rgba(0,204,255,0.12) inset; }
+  .order-brand { color: var(--white); font-weight: 700; font-size: 13px; margin-bottom: 2px; }
+  .order-meta { font-size: 10px; font-family: 'DM Mono', monospace; color: var(--muted); margin-bottom: 6px; }
+  .order-row { font-size: 11px; color: var(--text); margin: 3px 0; line-height: 1.3; }
+  .order-row strong { color: var(--muted); font-size: 9px; text-transform: uppercase; letter-spacing: .08em; }
+  .order-actions { display: grid; grid-template-columns: 1fr; gap: 6px; margin-top: 8px; }
+  .mini-btn { height: 28px; border-radius: 6px; border: 1px solid rgba(0,204,255,0.3); background: var(--cyan-dim); color: var(--cyan); font-family: 'Barlow Condensed', sans-serif; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; cursor: pointer; }
+  .mini-btn:hover { background: var(--cyan); color: #020617; }
+  .mini-btn:disabled { opacity: .45; cursor: not-allowed; }
+  .assign-box { display: none; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+  .assign-box.show { display: block; }
+  .order-pin { background: var(--cyan); color: #020617; border: 2px solid #fff; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 12px; box-shadow: 0 0 0 4px rgba(0,204,255,.18); }
+  .drop-pin { background: var(--danger); color: #020617; border: 2px solid #fff; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 10px; }
+  .popup-link { color: var(--cyan); text-decoration: none; }
+  .popup-link:hover { text-decoration: underline; }
+
+  @media (max-width: 980px) {
+    body.app-mode #appScreen { grid-template-columns: 300px 1fr; grid-template-rows: 1fr 310px; }
+    #sidebar { grid-row: 1 / span 2; }
+    #ordersPanel { grid-column: 2; grid-row: 2; border-left: none; border-top: 1px solid var(--border2); }
+  }
 
   .leaflet-popup-content-wrapper { border-radius: 8px; background: var(--panel); color: var(--text); border: 1px solid var(--border2); }
   .leaflet-popup-tip { background: var(--panel); border: 1px solid var(--border2); }
@@ -214,8 +243,18 @@
     <div class="sidebar-body">
       <div class="section">
         <div class="section-title">Region</div>
-        <label class="app-label" for="regionId">Region ID</label>
-        <input id="regionId" class="app-input" type="number" placeholder="e.g. 58" value="58" />
+        <label class="app-label" for="regionId">Region</label>
+        <select id="regionId" class="app-select">
+          <option value="54">US Region 1</option>
+          <option value="55">US Region 2</option>
+          <option value="56">US Region 3</option>
+          <option value="57">US Region 4</option>
+          <option value="58" selected>US Region 5</option>
+          <option value="59">US Region 6</option>
+          <option value="60">US Region 7</option>
+          <option value="61">US Region 8</option>
+          <option value="62">US Region 9</option>
+        </select>
         <button class="app-btn" id="loadBtn">Load Drivers</button>
         <button class="app-btn secondary" id="refreshBtn" style="margin-top: 6px;">Refresh</button>
         <div class="status-msg" id="statusMsg"></div>
@@ -226,6 +265,7 @@
         <label class="checkbox-row"><input type="checkbox" id="filterOnline" checked> <span><span class="status-dot dot-online"></span>Online</span></label>
         <label class="checkbox-row"><input type="checkbox" id="filterOnJob" checked> <span><span class="status-dot dot-on-job"></span>On Job</span></label>
         <label class="checkbox-row"><input type="checkbox" id="filterOffline"> <span><span class="status-dot dot-offline"></span>Offline</span></label>
+        <label class="checkbox-row"><input type="checkbox" id="filterCatering" checked> <span>Catering cohort only</span></label>
 
         <label class="app-label" for="searchBox" style="margin-top: 12px;">Search</label>
         <input id="searchBox" class="app-input" placeholder="ID, name, phone, zone..." />
@@ -256,6 +296,26 @@
   </aside>
 
   <div id="map"></div>
+
+  <aside id="ordersPanel">
+    <div class="orders-header">
+      <div class="orders-title">Orders</div>
+      <div class="orders-sub" id="ordersSub">New ezCater pickup map</div>
+    </div>
+    <div class="orders-controls">
+      <label class="app-label" for="ordersWindow">Window</label>
+      <select id="ordersWindow" class="app-select">
+        <option value="12" selected>Next 12 hours</option>
+        <option value="24">Next 24 hours</option>
+      </select>
+      <button class="app-btn" id="loadOrdersBtn">Load Orders</button>
+      <button class="app-btn secondary" id="clearOrdersBtn" style="margin-top: 6px;">Clear Orders</button>
+      <div class="status-msg" id="ordersStatus"></div>
+    </div>
+    <div class="orders-list" id="ordersList">
+      <div class="order-row" style="color: var(--muted); padding: 6px;">Load orders to map New ezCater pickups.</div>
+    </div>
+  </aside>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -343,7 +403,7 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
   }
 });
 
-let map, cluster, allFeatures = [], allMarkers = [];
+let map, cluster, orderLayer, routeLayer, allFeatures = [], allMarkers = [], allOrders = [], orderMarkers = [];
 
 function enterApp() {
   document.body.classList.add('app-mode');
@@ -379,6 +439,8 @@ function initMap() {
     maxClusterRadius: 50
   });
   map.addLayer(cluster);
+  orderLayer = L.layerGroup().addTo(map);
+  routeLayer = L.layerGroup().addTo(map);
 }
 
 function bindAppEvents() {
@@ -388,7 +450,9 @@ function bindAppEvents() {
   document.getElementById('loadBtn').addEventListener('click', loadDrivers);
   document.getElementById('refreshBtn').addEventListener('click', loadDrivers);
   document.getElementById('logoutBtn').addEventListener('click', logout);
-  ['filterOnline','filterOnJob','filterOffline','searchBox','zoneFilter'].forEach(id => {
+  document.getElementById('loadOrdersBtn').addEventListener('click', loadOrders);
+  document.getElementById('clearOrdersBtn').addEventListener('click', clearOrders);
+  ['filterOnline','filterOnJob','filterOffline','filterCatering','searchBox','zoneFilter'].forEach(id => {
     const el = document.getElementById(id);
     el.addEventListener('input', rebuildMarkers);
     el.addEventListener('change', rebuildMarkers);
@@ -409,6 +473,16 @@ function classify(p) {
   return 'offline';
 }
 function colorFor(cls) { return cls === 'on-job' ? '#f59e0b' : cls === 'online' ? '#22c55e' : '#6b7280'; }
+function hasCateringCohort(p) {
+  const cohorts = Array.isArray(p.DriverCohorts) ? p.DriverCohorts : [];
+  return cohorts.some(c => String(c).toLowerCase().includes('catering'));
+}
+function driverProfileUrl(driverId) {
+  return `https://live.skipcart.com/#/editdriver/${encodeURIComponent(driverId)}`;
+}
+function escapeHtml(v) {
+  return String(v ?? '').replace(/[&<>"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]));
+}
 
 function buildPopup(p) {
   const cls = classify(p);
@@ -419,7 +493,7 @@ function buildPopup(p) {
       <div class="popup-name">${p.Driver_Name || 'Unknown'}
         <span class="popup-status ${cls}" style="margin-left:6px;">${label}</span>
       </div>
-      <div class="popup-row"><strong>ID</strong> <span class="popup-id">${p.DriverId}</span></div>
+      <div class="popup-row"><strong>ID</strong> <a class="popup-id popup-link" href="${driverProfileUrl(p.DriverId)}" target="_blank" rel="noopener noreferrer">${p.DriverId}</a></div>
       <div class="popup-row"><strong>Phone</strong> ${p.Phone_Number || '—'}</div>
       <div class="popup-row"><strong>Zone</strong> ${p.Zone_Name || '—'}</div>
       <div class="popup-row"><strong>Region</strong> ${p.Region_Name || '—'}</div>
@@ -438,6 +512,7 @@ function rebuildMarkers() {
   const showOnline  = document.getElementById('filterOnline').checked;
   const showOnJob   = document.getElementById('filterOnJob').checked;
   const showOffline = document.getElementById('filterOffline').checked;
+  const cateringOnly = document.getElementById('filterCatering').checked;
   const search      = document.getElementById('searchBox').value.trim().toLowerCase();
   const zone        = document.getElementById('zoneFilter').value;
 
@@ -452,6 +527,7 @@ function rebuildMarkers() {
     if (cls === 'online' && !showOnline) continue;
     if (cls === 'on-job' && !showOnJob) continue;
     if (cls === 'offline' && !showOffline) continue;
+    if (cateringOnly && !hasCateringCohort(p)) continue;
     if (zone && p.Zone_Name !== zone) continue;
     if (search) {
       const hay = [p.DriverId, p.Driver_Name, p.Phone_Number, p.Email, p.Zone_Name, p.OrderId].filter(Boolean).join(' ').toLowerCase();
@@ -507,6 +583,229 @@ function ingest(payload) {
   }
 }
 
+
+function setOrdersStatus(msg, kind) {
+  const el = document.getElementById('ordersStatus');
+  el.textContent = msg;
+  el.className = 'status-msg ' + (kind || '');
+}
+
+function clearOrders() {
+  allOrders = [];
+  orderMarkers = [];
+  if (orderLayer) orderLayer.clearLayers();
+  if (routeLayer) routeLayer.clearLayers();
+  document.getElementById('ordersSub').textContent = 'New ezCater pickup map';
+  document.getElementById('ordersList').innerHTML = '<div class="order-row" style="color: var(--muted); padding: 6px;">Load orders to map New ezCater pickups.</div>';
+  setOrdersStatus('', '');
+}
+
+function fmtDateTime(v) {
+  if (!v) return '—';
+  const d = new Date(String(v).endsWith('Z') ? v : String(v));
+  if (!isFinite(d.getTime())) return v;
+  return d.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
+function orderHasPickup(o) {
+  return o && o.pickup && isFinite(o.pickup.lat) && isFinite(o.pickup.lng);
+}
+function orderHasDropoff(o) {
+  return o && o.dropoff && isFinite(o.dropoff.lat) && isFinite(o.dropoff.lng);
+}
+
+function orderPopup(o) {
+  return `
+    <div class="popup-content">
+      <div class="popup-name">${escapeHtml(o.brandName || 'ezCater Order')}</div>
+      <div class="popup-row"><strong>Order</strong> ${escapeHtml(o.orderId)} ${o.externalOrderId ? `· ${escapeHtml(o.externalOrderId)}` : ''}</div>
+      <div class="popup-row"><strong>Job</strong> ${escapeHtml(o.jobId)}</div>
+      <div class="popup-row"><strong>Pickup</strong> ${escapeHtml(o.pickup?.address || '—')}</div>
+      <div class="popup-row"><strong>Dropoff</strong> ${escapeHtml(o.dropoff?.address || '—')}</div>
+      <div class="popup-row"><strong>Window</strong> ${escapeHtml(fmtDateTime(o.delWindowStart))} – ${escapeHtml(fmtDateTime(o.delWindowEnd))}</div>
+    </div>`;
+}
+
+function mapOrders() {
+  orderLayer.clearLayers();
+  routeLayer.clearLayers();
+  orderMarkers = [];
+
+  allOrders.forEach((o, idx) => {
+    if (!orderHasPickup(o)) return;
+    const icon = L.divIcon({ className: '', html: `<div class="order-pin">${idx + 1}</div>`, iconSize: [22, 22], iconAnchor: [11, 11] });
+    const marker = L.marker([o.pickup.lat, o.pickup.lng], { icon });
+    marker.bindPopup(orderPopup(o));
+    marker.bindTooltip(`${o.brandName || 'ezCater'} · #${o.orderId}`, { direction: 'top', offset: [0, -8] });
+    marker.on('click', () => selectOrder(o.orderId, true));
+    marker.addTo(orderLayer);
+    orderMarkers.push(marker);
+  });
+
+  const pts = allOrders.filter(orderHasPickup).map(o => [o.pickup.lat, o.pickup.lng]);
+  if (pts.length) {
+    const bounds = L.latLngBounds(pts);
+    if (bounds.isValid()) map.fitBounds(bounds, { padding: [40, 40], maxZoom: 11 });
+  }
+}
+
+function renderOrdersList() {
+  const list = document.getElementById('ordersList');
+  if (!allOrders.length) {
+    list.innerHTML = '<div class="order-row" style="color: var(--muted); padding: 6px;">No New ezCater orders found for the selected window.</div>';
+    return;
+  }
+  list.innerHTML = allOrders.map((o, idx) => {
+    const canAssign = o.jobId && o.orderId;
+    return `
+      <div class="order-card" data-order-id="${escapeHtml(o.orderId)}">
+        <div class="order-brand">${idx + 1}. ${escapeHtml(o.brandName || 'ezCater Order')}</div>
+        <div class="order-meta">Order ${escapeHtml(o.orderId)} ${o.externalOrderId ? `· ${escapeHtml(o.externalOrderId)}` : ''}</div>
+        <div class="order-row"><strong>Window</strong> ${escapeHtml(fmtDateTime(o.delWindowStart))} – ${escapeHtml(fmtDateTime(o.delWindowEnd))}</div>
+        <div class="order-row"><strong>Pickup</strong> ${escapeHtml(o.pickup?.address || 'No pickup GPS found')}</div>
+        <div class="order-row"><strong>Dropoff</strong> ${escapeHtml(o.dropoff?.address || 'No dropoff GPS found')}</div>
+        <div class="order-row"><strong>Region</strong> ${escapeHtml(o.regionName || '—')} · ${escapeHtml(o.zoneName || '—')}</div>
+        ${o.stepsError ? `<div class="order-row" style="color: var(--danger);"><strong>Steps</strong> ${escapeHtml(o.stepsError)}</div>` : ''}
+        <div class="order-actions">
+          <button class="mini-btn" data-action="assign" data-order-id="${escapeHtml(o.orderId)}" ${canAssign ? '' : 'disabled'}>Assign</button>
+        </div>
+        <div class="assign-box" id="assign-${escapeHtml(o.orderId)}">
+          <label class="app-label" for="driver-${escapeHtml(o.orderId)}">Catering driver</label>
+          <input class="app-input assign-driver-search" id="driver-${escapeHtml(o.orderId)}" data-order-id="${escapeHtml(o.orderId)}" list="cateringDrivers" placeholder="Search/select driver ID or name..." />
+          <button class="mini-btn" data-action="send" data-order-id="${escapeHtml(o.orderId)}" style="margin-top:6px;">Send Offer</button>
+          <div class="order-row" id="assign-status-${escapeHtml(o.orderId)}" style="margin-top:6px;color:var(--muted);"></div>
+        </div>
+      </div>`;
+  }).join('') + '<datalist id="cateringDrivers">' + cateringDriverOptions() + '</datalist>';
+
+  list.querySelectorAll('.order-card').forEach(card => {
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('button') || e.target.closest('input')) return;
+      selectOrder(card.dataset.orderId, true);
+    });
+  });
+  list.querySelectorAll('[data-action="assign"]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.orderId;
+      selectOrder(id, true);
+      document.getElementById(`assign-${id}`)?.classList.toggle('show');
+    });
+  });
+  list.querySelectorAll('[data-action="send"]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      sendOrderOffer(btn.dataset.orderId);
+    });
+  });
+}
+
+function cateringDriverOptions() {
+  const seen = new Set();
+  return allFeatures
+    .map(f => f.properties)
+    .filter(p => hasCateringCohort(p))
+    .filter(p => {
+      if (!p.DriverId || seen.has(String(p.DriverId))) return false;
+      seen.add(String(p.DriverId));
+      return true;
+    })
+    .sort((a, b) => String(a.Driver_Name || '').localeCompare(String(b.Driver_Name || '')))
+    .map(p => `<option value="${escapeHtml(p.DriverId)}">${escapeHtml(p.Driver_Name || '')} · ${escapeHtml(p.Zone_Name || '')}</option>`)
+    .join('');
+}
+
+function selectOrder(orderId, pan) {
+  const o = allOrders.find(x => String(x.orderId) === String(orderId));
+  if (!o) return;
+
+  document.querySelectorAll('.order-card').forEach(c => c.classList.toggle('active', String(c.dataset.orderId) === String(orderId)));
+  routeLayer.clearLayers();
+
+  if (orderHasPickup(o) && orderHasDropoff(o)) {
+    const line = L.polyline([[o.pickup.lat, o.pickup.lng], [o.dropoff.lat, o.dropoff.lng]], {
+      color: '#00CCFF',
+      weight: 3,
+      opacity: 0.9,
+      dashArray: '7 7'
+    }).addTo(routeLayer);
+    const dropIcon = L.divIcon({ className: '', html: '<div class="drop-pin">D</div>', iconSize: [18, 18], iconAnchor: [9, 9] });
+    L.marker([o.dropoff.lat, o.dropoff.lng], { icon: dropIcon }).bindPopup(orderPopup(o)).addTo(routeLayer);
+    if (pan) map.fitBounds(line.getBounds(), { padding: [55, 55], maxZoom: 13 });
+  } else if (orderHasPickup(o) && pan) {
+    map.setView([o.pickup.lat, o.pickup.lng], Math.max(map.getZoom(), 12));
+  }
+}
+
+function findCateringDriver(raw) {
+  const q = String(raw || '').trim().toLowerCase();
+  if (!q) return null;
+  const candidates = allFeatures.map(f => f.properties).filter(p => hasCateringCohort(p));
+  return candidates.find(p => String(p.DriverId).toLowerCase() === q)
+      || candidates.find(p => String(p.Driver_Name || '').toLowerCase().includes(q))
+      || null;
+}
+
+async function sendOrderOffer(orderId) {
+  const o = allOrders.find(x => String(x.orderId) === String(orderId));
+  const status = document.getElementById(`assign-status-${orderId}`);
+  const input = document.getElementById(`driver-${orderId}`);
+  const driver = findCateringDriver(input?.value);
+  if (!o || !driver) {
+    if (status) status.textContent = 'Choose a Catering cohort driver first.';
+    return;
+  }
+  if (status) status.textContent = `Sending offer to ${driver.Driver_Name || driver.DriverId}…`;
+
+  try {
+    const r = await fetch('/api/assign-order', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Usertoken': Session.userToken,
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({ jobId: o.jobId, driverId: driver.DriverId, orderId: o.orderId })
+    });
+    const json = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(json.message || json.Message || json.error || json.upstream?.message || json.upstream?.Message || 'Assignment failed');
+    if (status) status.textContent = json.message || json.Message || 'Offer sent to driver.';
+  } catch (err) {
+    console.error(err);
+    if (status) status.textContent = 'Error: ' + err.message;
+  }
+}
+
+async function loadOrders() {
+  if (!Session.isValid() || !Session.userToken) {
+    setOrdersStatus('Session expired. Please log in again.', 'error');
+    setTimeout(logout, 1200);
+    return;
+  }
+
+  const hours = document.getElementById('ordersWindow').value || '12';
+  const regionId = document.getElementById('regionId').value.trim();
+  setOrdersStatus('Loading New ezCater orders…', 'info');
+  document.getElementById('loadOrdersBtn').disabled = true;
+
+  try {
+    const url = `/api/orders?hours=${encodeURIComponent(hours)}${regionId ? '&regionId=' + encodeURIComponent(regionId) : ''}`;
+    const r = await fetch(url, { headers: { 'X-Usertoken': Session.userToken, 'Accept': 'application/json' } });
+    const json = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(json.error || 'Orders request failed (' + r.status + ')');
+    allOrders = Array.isArray(json.orders) ? json.orders : [];
+    mapOrders();
+    renderOrdersList();
+    document.getElementById('ordersSub').textContent = `${allOrders.length.toLocaleString()} New ezCater orders · next ${hours}h`;
+    setOrdersStatus(`Loaded ${allOrders.length.toLocaleString()} orders`, 'success');
+  } catch (err) {
+    console.error(err);
+    setOrdersStatus('Error: ' + err.message, 'error');
+  } finally {
+    document.getElementById('loadOrdersBtn').disabled = false;
+  }
+}
+
 async function loadDrivers() {
   if (!Session.isValid() || !Session.userToken) {
     setStatus('Session expired. Please log in again.', 'error');
@@ -539,6 +838,7 @@ async function loadDrivers() {
 
     const json = await r.json();
     ingest(json);
+    if (allOrders.length) renderOrdersList();
     setStatus(`Loaded ${allFeatures.length.toLocaleString()} drivers`, 'success');
   } catch (e) {
     console.error(e);
