@@ -531,10 +531,29 @@ function escapeHtml(v) {
   return String(v ?? '').replace(/[&<>"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]));
 }
 
-function dateMs(v) {
+const APP_TIME_ZONE = 'America/Chicago';
+
+function parseSkipcartDateValueMs(v) {
   if (!v) return NaN;
-  const d = new Date(String(v));
-  return isFinite(d.getTime()) ? d.getTime() : NaN;
+  if (v instanceof Date) return v.getTime();
+  if (typeof v === 'number') return v;
+  const raw = String(v).trim();
+  if (!raw) return NaN;
+
+  // Skipcart order windows are UTC, but some API fields are returned as
+  // timezone-less ISO strings like 2026-05-13T14:59:00. Treat those as UTC
+  // so the UI shows the same Central-time value as live.skipcart.com.
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,7})?)?$/.test(raw)) {
+    const asUtc = Date.parse(raw + 'Z');
+    if (Number.isFinite(asUtc)) return asUtc;
+  }
+
+  const direct = Date.parse(raw);
+  return Number.isFinite(direct) ? direct : NaN;
+}
+
+function dateMs(v) {
+  return parseSkipcartDateValueMs(v);
 }
 function orderStartMs(o) { return dateMs(o?.delWindowStart); }
 function orderEndMs(o) { return dateMs(o?.delWindowEnd) || orderStartMs(o); }
@@ -582,7 +601,7 @@ function driverHasConflictForSelectedOrder(p) {
 }
 function scheduledSummary(o) {
   const driver = o.driverName ? ` · ${o.driverName}` : '';
-  return `${o.brandName || 'ezCater'} #${o.orderId || '—'}${driver} · ${fmtDateTime(o.delWindowStart)}–${fmtDateTime(o.delWindowEnd)}`;
+  return `${o.brandName || 'ezCater'} #${o.orderId || '—'}${driver} · ${fmtTimeWindow(o.delWindowStart, o.delWindowEnd)}`;
 }
 
 function buildPopup(p) {
@@ -607,7 +626,7 @@ function buildPopup(p) {
       ${selectedConflicts.slice(0, 2).map(o => `<div class="popup-row scheduled-line">${escapeHtml(scheduledSummary(o))}</div>`).join('')}` : '';
   const assignBlock = selectedOrder ? `
       <div class="popup-row" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
-        <strong>Selected</strong> Order ${escapeHtml(selectedOrder.orderId)} · ${escapeHtml(fmtDateTime(selectedOrder.delWindowStart))}–${escapeHtml(fmtDateTime(selectedOrder.delWindowEnd))}
+        <strong>Selected</strong> Order ${escapeHtml(selectedOrder.orderId)} · ${escapeHtml(fmtTimeWindow(selectedOrder.delWindowStart, selectedOrder.delWindowEnd))}
       </div>
       ${conflictBlock}
       ${canOffer
@@ -737,9 +756,29 @@ function clearOrders() {
 
 function fmtDateTime(v) {
   if (!v) return '—';
-  const d = new Date(String(v).endsWith('Z') ? v : String(v));
-  if (!isFinite(d.getTime())) return v;
-  return d.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  const ms = parseSkipcartDateValueMs(v);
+  if (!Number.isFinite(ms)) return v;
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: APP_TIME_ZONE,
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZoneName: 'short'
+  }).format(new Date(ms));
+}
+
+function fmtTimeWindow(start, end) {
+  const s = fmtDateTime(start);
+  const endMs = parseSkipcartDateValueMs(end);
+  if (!Number.isFinite(endMs)) return s;
+  const endOnly = new Intl.DateTimeFormat('en-US', {
+    timeZone: APP_TIME_ZONE,
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZoneName: 'short'
+  }).format(new Date(endMs));
+  return `${s} – ${endOnly}`;
 }
 
 function orderHasPickup(o) {
@@ -757,7 +796,7 @@ function orderPopup(o) {
       <div class="popup-row"><strong>Job</strong> ${escapeHtml(o.jobId)}</div>
       <div class="popup-row"><strong>Pickup</strong> ${escapeHtml(o.pickup?.address || '—')}</div>
       <div class="popup-row"><strong>Dropoff</strong> ${escapeHtml(o.dropoff?.address || '—')}</div>
-      <div class="popup-row"><strong>Window</strong> ${escapeHtml(fmtDateTime(o.delWindowStart))} – ${escapeHtml(fmtDateTime(o.delWindowEnd))}</div>
+      <div class="popup-row"><strong>Window</strong> ${escapeHtml(fmtTimeWindow(o.delWindowStart, o.delWindowEnd))}</div>
     </div>`;
 }
 
