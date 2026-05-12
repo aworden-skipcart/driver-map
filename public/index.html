@@ -278,7 +278,14 @@ const Session = {
     ['sc_token','sc_email','sc_name','sc_user_token','sc_user_token_expires']
       .forEach(k => sessionStorage.removeItem(k));
   },
-  isValid() { return !!this.token; }
+  isValid() {
+    if (!this.token || !this.userToken) return false;
+    if (this.userExpires) {
+      const exp = new Date(this.userExpires).getTime();
+      if (isFinite(exp) && exp < Date.now()) return false;
+    }
+    return true;
+  }
 };
 
 document.getElementById('togglePw').addEventListener('click', () => {
@@ -501,7 +508,7 @@ function ingest(payload) {
 }
 
 async function loadDrivers() {
-  if (!Session.isValid()) {
+  if (!Session.isValid() || !Session.userToken) {
     setStatus('Session expired. Please log in again.', 'error');
     setTimeout(logout, 1200);
     return;
@@ -515,18 +522,16 @@ async function loadDrivers() {
     const regionId = document.getElementById('regionId').value.trim();
     const url = '/api/drivers' + (regionId ? '?regionId=' + encodeURIComponent(regionId) : '');
     const r = await fetch(url, {
-      headers: { 'X-Apptoken': Session.token, 'Accept': 'application/json' }
+      headers: { 'X-Usertoken': Session.userToken, 'Accept': 'application/json' }
     });
 
     if (r.status === 401 || r.status === 403) {
-      // Try to surface diagnostic info from the response body
       let detail = '';
       try {
         const errJson = await r.json();
         console.error('[drivers] 401 debug:', errJson);
-        if (errJson.debug) {
-          detail = ` (supplied: ${errJson.debug.suppliedLen}ch, expected: ${errJson.debug.expectedLen}ch, hasHeader: ${errJson.debug.hasHeader})`;
-        }
+        if (errJson.reason) detail = ' (' + errJson.reason + ')';
+        if (errJson.upstream?.Message) detail = ' — ' + errJson.upstream.Message;
       } catch {}
       throw new Error('Unauthorized — please log in again' + detail);
     }
@@ -538,8 +543,7 @@ async function loadDrivers() {
   } catch (e) {
     console.error(e);
     setStatus('Error: ' + e.message, 'error');
-    // Don't auto-logout on first 401 — let the user see the debug message
-    if (/unauthorized/i.test(e.message) && !/supplied/.test(e.message)) setTimeout(logout, 1500);
+    if (/unauthorized/i.test(e.message)) setTimeout(logout, 2500);
   } finally {
     document.getElementById('loadBtn').disabled = false;
     document.getElementById('refreshBtn').disabled = false;
