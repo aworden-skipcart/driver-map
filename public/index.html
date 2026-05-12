@@ -142,19 +142,36 @@
   .orders-title { font-family: 'Barlow Condensed', sans-serif; font-size: 13px; font-weight: 800; letter-spacing: 0.2em; text-transform: uppercase; color: var(--cyan); }
   .orders-sub { font-size: 10px; color: var(--muted); font-family: 'DM Mono', monospace; margin-top: 2px; }
   .orders-controls { padding: 12px 16px; border-bottom: 1px solid var(--border); }
-  .orders-list { flex: 1; overflow-y: auto; padding: 10px; }
-  .order-card { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin-bottom: 10px; cursor: pointer; transition: all .15s; }
-  .order-card:hover, .order-card.active { border-color: rgba(0,204,255,0.45); box-shadow: 0 0 0 1px rgba(0,204,255,0.12) inset; }
-  .order-brand { color: var(--white); font-weight: 700; font-size: 13px; margin-bottom: 2px; }
-  .order-meta { font-size: 10px; font-family: 'DM Mono', monospace; color: var(--muted); margin-bottom: 6px; }
-  .order-row { font-size: 11px; color: var(--text); margin: 3px 0; line-height: 1.3; }
-  .order-row strong { color: var(--muted); font-size: 9px; text-transform: uppercase; letter-spacing: .08em; }
-  .order-actions { display: grid; grid-template-columns: 1fr; gap: 6px; margin-top: 8px; }
-  .mini-btn { height: 28px; border-radius: 6px; border: 1px solid rgba(0,204,255,0.3); background: var(--cyan-dim); color: var(--cyan); font-family: 'Barlow Condensed', sans-serif; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; cursor: pointer; }
+  .orders-list { flex: 1; overflow-y: auto; padding: 12px; }
+  .order-card { position: relative; background: linear-gradient(180deg, rgba(12,21,48,.98), rgba(8,15,36,.98)); border: 1px solid rgba(26,48,80,.95); border-radius: 14px; padding: 12px; margin-bottom: 12px; cursor: pointer; transition: transform .15s, border-color .15s, box-shadow .15s; box-shadow: 0 10px 26px rgba(0,0,0,.22); overflow: hidden; }
+  .order-card::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 3px; background: linear-gradient(180deg, var(--cyan), rgba(0,204,255,.2)); opacity: .75; }
+  .order-card:hover, .order-card.active { transform: translateY(-1px); border-color: rgba(0,204,255,0.48); box-shadow: 0 12px 30px rgba(0,0,0,.28), 0 0 0 1px rgba(0,204,255,0.12) inset; }
+  .order-card.active::before { opacity: 1; }
+  .order-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+  .order-brand { color: var(--white); font-weight: 800; font-size: 14px; line-height: 1.15; padding-left: 2px; }
+  .order-chip { flex: none; background: rgba(0,204,255,.12); color: var(--cyan); border: 1px solid rgba(0,204,255,.25); border-radius: 999px; padding: 3px 8px; font-size: 10px; font-family: 'DM Mono', monospace; }
+  .order-meta { font-size: 10px; font-family: 'DM Mono', monospace; color: var(--muted); margin-bottom: 8px; }
+  .order-time { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+  .order-time-box { background: rgba(0,0,0,.22); border: 1px solid var(--border); border-radius: 10px; padding: 7px 8px; }
+  .order-time-label { font-size: 8px; color: var(--muted); letter-spacing: .12em; text-transform: uppercase; font-weight: 800; }
+  .order-time-value { color: var(--white); font-size: 12px; margin-top: 2px; }
+  .order-row { font-size: 11px; color: var(--text); margin: 5px 0; line-height: 1.35; }
+  .order-row strong { display: inline-block; min-width: 50px; color: var(--muted); font-size: 9px; text-transform: uppercase; letter-spacing: .08em; }
+  .order-actions { display: grid; grid-template-columns: 1fr; gap: 6px; margin-top: 10px; }
+  .mini-btn { min-height: 28px; border-radius: 8px; border: 1px solid rgba(0,204,255,0.3); background: var(--cyan-dim); color: var(--cyan); font-family: 'Barlow Condensed', sans-serif; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; cursor: pointer; padding: 0 10px; }
   .mini-btn:hover { background: var(--cyan); color: #020617; }
   .mini-btn:disabled { opacity: .45; cursor: not-allowed; }
-  .assign-box { display: none; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+  .assign-box { display: none; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
   .assign-box.show { display: block; }
+  .assign-hint { color: var(--muted); font-size: 11px; line-height: 1.35; margin: 6px 0 8px; }
+  .assign-banner { display: none; margin-top: 8px; padding: 8px 10px; border-radius: 8px; background: rgba(0,204,255,.09); border: 1px solid rgba(0,204,255,.2); color: var(--cyan); font-size: 11px; line-height: 1.35; }
+  .assign-banner.show { display: block; }
+  .driver-car-marker { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; color: #020617; border: 2px solid rgba(255,255,255,.92); box-shadow: 0 0 0 4px rgba(0,204,255,.10), 0 8px 18px rgba(0,0,0,.35); }
+  .driver-car-marker svg { width: 18px; height: 18px; display: block; }
+  .driver-car-marker.online { background: #22c55e; }
+  .driver-car-marker.on-job { background: #f59e0b; }
+  .driver-car-marker.offline { background: #6b7280; color: #e5e7eb; }
+  .driver-car-marker.assignable { box-shadow: 0 0 0 5px rgba(0,204,255,.28), 0 0 22px rgba(0,204,255,.28), 0 8px 18px rgba(0,0,0,.35); }
   .order-pin { background: var(--cyan); color: #020617; border: 2px solid #fff; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 12px; box-shadow: 0 0 0 4px rgba(0,204,255,.18); }
   .drop-pin { background: var(--danger); color: #020617; border: 2px solid #fff; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 10px; }
   .popup-link { color: var(--cyan); text-decoration: none; }
@@ -311,6 +328,7 @@
       <button class="app-btn" id="loadOrdersBtn">Load Orders</button>
       <button class="app-btn secondary" id="clearOrdersBtn" style="margin-top: 6px;">Clear Orders</button>
       <div class="status-msg" id="ordersStatus"></div>
+      <div class="assign-banner" id="assignBanner"></div>
     </div>
     <div class="orders-list" id="ordersList">
       <div class="order-row" style="color: var(--muted); padding: 6px;">Load orders to map New ezCater pickups.</div>
@@ -403,7 +421,7 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
   }
 });
 
-let map, cluster, orderLayer, routeLayer, allFeatures = [], allMarkers = [], allOrders = [], orderMarkers = [];
+let map, cluster, orderLayer, routeLayer, allFeatures = [], allMarkers = [], allOrders = [], orderMarkers = [], selectedAssignOrderId = null;
 
 function enterApp() {
   document.body.classList.add('app-mode');
@@ -473,9 +491,32 @@ function classify(p) {
   return 'offline';
 }
 function colorFor(cls) { return cls === 'on-job' ? '#f59e0b' : cls === 'online' ? '#22c55e' : '#6b7280'; }
+function normalizeCohortValues(raw) {
+  if (raw == null) return [];
+  const arr = Array.isArray(raw) ? raw : String(raw).split(/[;,|]/);
+  return arr.map(v => {
+    if (v && typeof v === 'object') return v.name || v.Name || v.cohortName || v.CohortName || v.title || v.Title || JSON.stringify(v);
+    return v;
+  }).filter(v => String(v || '').trim());
+}
+function getDriverCohorts(p) {
+  return [
+    ...normalizeCohortValues(p.DriverCohorts),
+    ...normalizeCohortValues(p.Cohorts),
+    ...normalizeCohortValues(p.Cohort),
+    ...normalizeCohortValues(p.CohortName),
+    ...normalizeCohortValues(p.DriverCohort),
+    ...normalizeCohortValues(p.DriverCohortName)
+  ];
+}
 function hasCateringCohort(p) {
-  const cohorts = Array.isArray(p.DriverCohorts) ? p.DriverCohorts : [];
-  return cohorts.some(c => String(c).toLowerCase().includes('catering'));
+  return getDriverCohorts(p).some(c => /cater/i.test(String(c)));
+}
+function driverCarIcon(cls, assignable) {
+  const html = `<div class="driver-car-marker ${cls}${assignable ? ' assignable' : ''}" title="${cls}">
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5.25 11.25 6.7 6.9A3 3 0 0 1 9.55 4.8h4.9a3 3 0 0 1 2.85 2.1l1.45 4.35A2.75 2.75 0 0 1 21 13.95v3.3a.95.95 0 0 1-.95.95h-1.1a1.7 1.7 0 0 1-3.4 0h-7.1a1.7 1.7 0 0 1-3.4 0h-1.1A.95.95 0 0 1 3 17.25v-3.3c0-1.2.78-2.25 2.25-2.7Zm2.95-.45h7.6l-1.05-3.15a.9.9 0 0 0-.86-.63H10.1a.9.9 0 0 0-.86.63L8.2 10.8Zm-.55 4.65a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5Zm8.7 0a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5Z"/></svg>
+  </div>`;
+  return L.divIcon({ className: '', html, iconSize: [30, 30], iconAnchor: [15, 15], popupAnchor: [0, -14], tooltipAnchor: [0, -14] });
 }
 function driverProfileUrl(driverId) {
   return `https://live.skipcart.com/#/editdriver/${encodeURIComponent(driverId)}`;
@@ -488,20 +529,31 @@ function buildPopup(p) {
   const cls = classify(p);
   const label = cls === 'on-job' ? 'On Job' : cls === 'online' ? 'Online' : 'Offline';
   const score = p.ScoreCard || {};
+  const cohorts = getDriverCohorts(p);
+  const selectedOrder = selectedAssignOrderId ? allOrders.find(o => String(o.orderId) === String(selectedAssignOrderId)) : null;
+  const canOffer = selectedOrder && hasCateringCohort(p) && selectedOrder.jobId && selectedOrder.orderId;
+  const assignBlock = selectedOrder ? `
+      <div class="popup-row" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
+        <strong>Selected</strong> Order ${escapeHtml(selectedOrder.orderId)}
+      </div>
+      ${canOffer
+        ? `<button class="mini-btn popup-assign-driver" data-driver-id="${escapeHtml(p.DriverId)}" data-order-id="${escapeHtml(selectedOrder.orderId)}" style="width:100%;margin-top:6px;">Assign This Driver</button>`
+        : `<div class="popup-row" style="color:var(--danger);">This driver does not show a Catering cohort in the map feed.</div>`}` : '';
   return `
     <div class="popup-content">
-      <div class="popup-name">${p.Driver_Name || 'Unknown'}
+      <div class="popup-name">${escapeHtml(p.Driver_Name || 'Unknown')}
         <span class="popup-status ${cls}" style="margin-left:6px;">${label}</span>
       </div>
-      <div class="popup-row"><strong>ID</strong> <a class="popup-id popup-link" href="${driverProfileUrl(p.DriverId)}" target="_blank" rel="noopener noreferrer">${p.DriverId}</a></div>
-      <div class="popup-row"><strong>Phone</strong> ${p.Phone_Number || '—'}</div>
-      <div class="popup-row"><strong>Zone</strong> ${p.Zone_Name || '—'}</div>
-      <div class="popup-row"><strong>Region</strong> ${p.Region_Name || '—'}</div>
-      <div class="popup-row"><strong>Status</strong> ${p.Driver_Status || '—'}</div>
-      ${p.OrderId && p.OrderId !== '0' ? `<div class="popup-row"><strong>Order</strong> ${p.OrderId}</div>` : ''}
-      <div class="popup-row"><strong>Last Seen</strong> ${p.Last_Seen_Online || '—'}</div>
-      ${score.acceptanceRate !== undefined ? `<div class="popup-row"><strong>Accept</strong> ${score.acceptanceRate}% &nbsp; <strong>Complete</strong> ${score.completionRate}%</div>` : ''}
-      ${p.DriverCohorts && p.DriverCohorts.length ? `<div class="popup-row"><strong>Cohorts</strong> ${p.DriverCohorts.join(', ')}</div>` : ''}
+      <div class="popup-row"><strong>ID</strong> <a class="popup-id popup-link" href="${driverProfileUrl(p.DriverId)}" target="_blank" rel="noopener noreferrer">${escapeHtml(p.DriverId)}</a></div>
+      <div class="popup-row"><strong>Phone</strong> ${escapeHtml(p.Phone_Number || '—')}</div>
+      <div class="popup-row"><strong>Zone</strong> ${escapeHtml(p.Zone_Name || '—')}</div>
+      <div class="popup-row"><strong>Region</strong> ${escapeHtml(p.Region_Name || '—')}</div>
+      <div class="popup-row"><strong>Status</strong> ${escapeHtml(p.Driver_Status || '—')}</div>
+      ${p.OrderId && p.OrderId !== '0' ? `<div class="popup-row"><strong>Order</strong> ${escapeHtml(p.OrderId)}</div>` : ''}
+      <div class="popup-row"><strong>Last Seen</strong> ${escapeHtml(p.Last_Seen_Online || '—')}</div>
+      ${score.acceptanceRate !== undefined ? `<div class="popup-row"><strong>Accept</strong> ${escapeHtml(score.acceptanceRate)}% &nbsp; <strong>Complete</strong> ${escapeHtml(score.completionRate)}%</div>` : ''}
+      ${cohorts.length ? `<div class="popup-row"><strong>Cohorts</strong> ${escapeHtml(cohorts.join(', '))}</div>` : ''}
+      ${assignBlock}
     </div>`;
 }
 
@@ -537,14 +589,10 @@ function rebuildMarkers() {
     const [lng, lat] = f.geometry.coordinates;
     if (!isFinite(lat) || !isFinite(lng)) continue;
 
-    const marker = L.circleMarker([lat, lng], {
-      radius: cls === 'on-job' ? 8 : 6,
-      fillColor: colorFor(cls),
-      color: cls === 'on-job' ? '#fff' : colorFor(cls),
-      weight: cls === 'on-job' ? 2 : 1,
-      fillOpacity: 0.85
-    });
+    const marker = L.marker([lat, lng], { icon: driverCarIcon(cls, selectedAssignOrderId && hasCateringCohort(p)) });
+    marker.driverProperties = p;
     marker.bindPopup(buildPopup(p));
+    marker.on('popupopen', () => bindDriverPopupActions(marker));
     marker.bindTooltip(`#${p.DriverId} · ${p.Driver_Name || ''}`, { direction: 'top', offset: [0, -6] });
     allMarkers.push(marker);
     shown++;
@@ -591,6 +639,8 @@ function setOrdersStatus(msg, kind) {
 }
 
 function clearOrders() {
+  selectedAssignOrderId = null;
+  updateAssignBanner();
   allOrders = [];
   orderMarkers = [];
   if (orderLayer) orderLayer.clearLayers();
@@ -657,22 +707,30 @@ function renderOrdersList() {
   }
   list.innerHTML = allOrders.map((o, idx) => {
     const canAssign = o.jobId && o.orderId;
+    const activeAssign = String(selectedAssignOrderId || '') === String(o.orderId);
     return `
       <div class="order-card" data-order-id="${escapeHtml(o.orderId)}">
-        <div class="order-brand">${idx + 1}. ${escapeHtml(o.brandName || 'ezCater Order')}</div>
-        <div class="order-meta">Order ${escapeHtml(o.orderId)} ${o.externalOrderId ? `· ${escapeHtml(o.externalOrderId)}` : ''}</div>
-        <div class="order-row"><strong>Window</strong> ${escapeHtml(fmtDateTime(o.delWindowStart))} – ${escapeHtml(fmtDateTime(o.delWindowEnd))}</div>
-        <div class="order-row"><strong>Pickup</strong> ${escapeHtml(o.pickup?.address || 'No pickup GPS found')}</div>
-        <div class="order-row"><strong>Dropoff</strong> ${escapeHtml(o.dropoff?.address || 'No dropoff GPS found')}</div>
-        <div class="order-row"><strong>Region</strong> ${escapeHtml(o.regionName || '—')} · ${escapeHtml(o.zoneName || '—')}</div>
+        <div class="order-top">
+          <div class="order-brand">${idx + 1}. ${escapeHtml(o.brandName || 'ezCater Order')}</div>
+          <div class="order-chip">${escapeHtml(o.regionName || 'ezCater')}</div>
+        </div>
+        <div class="order-meta">Order ${escapeHtml(o.orderId)} ${o.externalOrderId ? `· Ext ${escapeHtml(o.externalOrderId)}` : ''} ${o.jobId ? `· Job ${escapeHtml(o.jobId)}` : ''}</div>
+        <div class="order-time">
+          <div class="order-time-box"><div class="order-time-label">Start</div><div class="order-time-value">${escapeHtml(fmtDateTime(o.delWindowStart))}</div></div>
+          <div class="order-time-box"><div class="order-time-label">End</div><div class="order-time-value">${escapeHtml(fmtDateTime(o.delWindowEnd))}</div></div>
+        </div>
+        <div class="order-row"><strong>Pickup</strong> ${escapeHtml(o.pickup?.entityName || o.pickup?.address || 'No pickup GPS found')}</div>
+        <div class="order-row"><strong>Dropoff</strong> ${escapeHtml(o.dropoff?.customerName || o.dropoff?.address || 'No dropoff GPS found')}</div>
+        <div class="order-row"><strong>Zone</strong> ${escapeHtml(o.zoneName || '—')}</div>
         ${o.stepsError ? `<div class="order-row" style="color: var(--danger);"><strong>Steps</strong> ${escapeHtml(o.stepsError)}</div>` : ''}
         <div class="order-actions">
-          <button class="mini-btn" data-action="assign" data-order-id="${escapeHtml(o.orderId)}" ${canAssign ? '' : 'disabled'}>Assign</button>
+          <button class="mini-btn" data-action="assign" data-order-id="${escapeHtml(o.orderId)}" ${canAssign ? '' : 'disabled'}>${activeAssign ? 'Assign Mode On' : 'Assign'}</button>
         </div>
-        <div class="assign-box" id="assign-${escapeHtml(o.orderId)}">
+        <div class="assign-box ${activeAssign ? 'show' : ''}" id="assign-${escapeHtml(o.orderId)}">
+          <div class="assign-hint">Search below, or click a Catering driver car on the map and use <strong>Assign This Driver</strong> from the driver info panel.</div>
           <label class="app-label" for="driver-${escapeHtml(o.orderId)}">Catering driver</label>
           <input class="app-input assign-driver-search" id="driver-${escapeHtml(o.orderId)}" data-order-id="${escapeHtml(o.orderId)}" list="cateringDrivers" placeholder="Search/select driver ID or name..." />
-          <button class="mini-btn" data-action="send" data-order-id="${escapeHtml(o.orderId)}" style="margin-top:6px;">Send Offer</button>
+          <button class="mini-btn" data-action="send" data-order-id="${escapeHtml(o.orderId)}" style="margin-top:6px;width:100%;">Send Offer</button>
           <div class="order-row" id="assign-status-${escapeHtml(o.orderId)}" style="margin-top:6px;color:var(--muted);"></div>
         </div>
       </div>`;
@@ -689,7 +747,7 @@ function renderOrdersList() {
       e.stopPropagation();
       const id = btn.dataset.orderId;
       selectOrder(id, true);
-      document.getElementById(`assign-${id}`)?.classList.toggle('show');
+      setAssignMode(selectedAssignOrderId === id ? null : id);
     });
   });
   list.querySelectorAll('[data-action="send"]').forEach(btn => {
@@ -737,6 +795,38 @@ function selectOrder(orderId, pan) {
   }
 }
 
+function setAssignMode(orderId) {
+  selectedAssignOrderId = orderId ? String(orderId) : null;
+  updateAssignBanner();
+  rebuildMarkers();
+  renderOrdersList();
+}
+function updateAssignBanner() {
+  const el = document.getElementById('assignBanner');
+  if (!el) return;
+  if (!selectedAssignOrderId) {
+    el.classList.remove('show');
+    el.textContent = '';
+    return;
+  }
+  const o = allOrders.find(x => String(x.orderId) === String(selectedAssignOrderId));
+  el.textContent = o ? `Assign mode: click a Catering driver car on the map to offer Order ${o.orderId}.` : '';
+  el.classList.toggle('show', !!o);
+}
+function bindDriverPopupActions(marker) {
+  setTimeout(() => {
+    const root = marker.getPopup()?.getElement();
+    const btn = root?.querySelector('.popup-assign-driver');
+    if (!btn || btn._bound) return;
+    btn._bound = true;
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      sendOrderOfferWithDriver(btn.dataset.orderId, btn.dataset.driverId);
+    });
+  }, 0);
+}
+
 function findCateringDriver(raw) {
   const q = String(raw || '').trim().toLowerCase();
   if (!q) return null;
@@ -747,15 +837,30 @@ function findCateringDriver(raw) {
 }
 
 async function sendOrderOffer(orderId) {
-  const o = allOrders.find(x => String(x.orderId) === String(orderId));
-  const status = document.getElementById(`assign-status-${orderId}`);
   const input = document.getElementById(`driver-${orderId}`);
   const driver = findCateringDriver(input?.value);
+  if (!driver) {
+    const status = document.getElementById(`assign-status-${orderId}`);
+    if (status) status.textContent = 'Choose a Catering cohort driver first, or click a driver car on the map.';
+    return;
+  }
+  return sendOrderOfferWithDriver(orderId, driver.DriverId);
+}
+
+async function sendOrderOfferWithDriver(orderId, driverId) {
+  const o = allOrders.find(x => String(x.orderId) === String(orderId));
+  const driver = allFeatures.map(f => f.properties).find(p => String(p.DriverId) === String(driverId));
+  const status = document.getElementById(`assign-status-${orderId}`);
   if (!o || !driver) {
-    if (status) status.textContent = 'Choose a Catering cohort driver first.';
+    if (status) status.textContent = 'Missing order or driver selection.';
+    return;
+  }
+  if (!hasCateringCohort(driver)) {
+    if (status) status.textContent = 'Selected driver does not show a Catering cohort in the driver location feed.';
     return;
   }
   if (status) status.textContent = `Sending offer to ${driver.Driver_Name || driver.DriverId}…`;
+  setOrdersStatus(`Sending offer to ${driver.Driver_Name || driver.DriverId} for Order ${o.orderId}…`, 'info');
 
   try {
     const r = await fetch('/api/assign-order', {
@@ -768,11 +873,23 @@ async function sendOrderOffer(orderId) {
       body: JSON.stringify({ jobId: o.jobId, driverId: driver.DriverId, orderId: o.orderId })
     });
     const json = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(json.message || json.Message || json.error || json.upstream?.message || json.upstream?.Message || 'Assignment failed');
-    if (status) status.textContent = json.message || json.Message || 'Offer sent to driver.';
+    if (!r.ok) {
+      const upstreamMsg = json.message || json.Message || json.upstream?.message || json.upstream?.Message;
+      throw new Error(upstreamMsg || json.error || 'Assignment failed');
+    }
+    const msg = json.message || json.Message || 'Offer sent to driver.';
+    if (status) status.textContent = msg;
+    setOrdersStatus(msg, 'success');
+    selectedAssignOrderId = null;
+    updateAssignBanner();
+    rebuildMarkers();
+    renderOrdersList();
+    map.closePopup();
   } catch (err) {
     console.error(err);
-    if (status) status.textContent = 'Error: ' + err.message;
+    const msg = 'Error: ' + err.message;
+    if (status) status.textContent = msg;
+    setOrdersStatus(msg, 'error');
   }
 }
 
@@ -793,11 +910,14 @@ async function loadOrders() {
     const r = await fetch(url, { headers: { 'X-Usertoken': Session.userToken, 'Accept': 'application/json' } });
     const json = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(json.error || 'Orders request failed (' + r.status + ')');
+    selectedAssignOrderId = null;
+    updateAssignBanner();
     allOrders = Array.isArray(json.orders) ? json.orders : [];
     mapOrders();
     renderOrdersList();
-    document.getElementById('ordersSub').textContent = `${allOrders.length.toLocaleString()} New ezCater orders · next ${hours}h`;
-    setOrdersStatus(`Loaded ${allOrders.length.toLocaleString()} orders`, 'success');
+    const capLabel = json.windowEnd ? ` · no later than ${fmtDateTime(json.windowEnd)}` : '';
+    document.getElementById('ordersSub').textContent = `${allOrders.length.toLocaleString()} New ezCater orders · next ${hours}h${capLabel}`;
+    setOrdersStatus(`Loaded ${allOrders.length.toLocaleString()} orders${capLabel}`, 'success');
   } catch (err) {
     console.error(err);
     setOrdersStatus('Error: ' + err.message, 'error');
