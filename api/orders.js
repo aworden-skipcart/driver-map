@@ -171,20 +171,59 @@ async function fetchOrdersByStatus({ statusName, start, end, pageSize, maxPages,
 }
 
 async function enrichOrders(orders, appToken, userToken) {
-  return mapLimit(orders, 6, async (order) => {
+  return mapLimit(orders, 5, async (order) => {
     const jobId = order.JobId || order.jobId;
-    if (!jobId) return normalizeOrder(order, null);
-    try {
-      const stepsJson = await upstreamJson(`https://live.skipcart.com/dash-api/v2api/steps/${encodeURIComponent(jobId)}`, {
-        method: 'GET',
-        headers: makeHeaders(appToken, userToken, false)
-      });
-      return normalizeOrder(order, stepsJson?.Result || stepsJson?.result || null);
-    } catch (err) {
-      console.error('[orders] steps enrichment failed', jobId, err.message);
-      return normalizeOrder(order, null, err.message);
-    }
+    if (!jobId) return normalizeOrder(order, null, null, null);
+
+    const [stepsResult, jobDetailsResult, paymentResult] = await Promise.all([
+      fetchSteps(jobId, appToken, userToken),
+      fetchJobDetails(jobId, appToken, userToken),
+      fetchPaymentDetails(jobId, appToken, userToken)
+    ]);
+
+    const errors = [stepsResult.error, jobDetailsResult.error, paymentResult.error].filter(Boolean).join(' | ') || null;
+    return normalizeOrder(order, stepsResult.result, jobDetailsResult.result, paymentResult.result, errors);
   });
+}
+
+async function fetchSteps(jobId, appToken, userToken) {
+  try {
+    const json = await upstreamJson(`https://live.skipcart.com/dash-api/v2api/steps/${encodeURIComponent(jobId)}`, {
+      method: 'GET',
+      headers: makeHeaders(appToken, userToken, false)
+    });
+    return { result: json?.Result || json?.result || null, error: null };
+  } catch (err) {
+    console.error('[orders] steps enrichment failed', jobId, err.message);
+    return { result: null, error: `steps: ${err.message}` };
+  }
+}
+
+async function fetchJobDetails(jobId, appToken, userToken) {
+  try {
+    const json = await upstreamJson('https://live.skipcart.com/dash-api/v1api/Jobs/search', {
+      method: 'POST',
+      headers: makeHeaders(appToken, userToken, true),
+      body: JSON.stringify({ filters: { jobs: [{ jobsId: Number(jobId) || jobId }] } })
+    });
+    return { result: json?.Result || json?.result || null, error: null };
+  } catch (err) {
+    console.error('[orders] job details enrichment failed', jobId, err.message);
+    return { result: null, error: `job details: ${err.message}` };
+  }
+}
+
+async function fetchPaymentDetails(jobId, appToken, userToken) {
+  try {
+    const json = await upstreamJson(`https://live.skipcart.com/dash-api/v1api/Jobs/DeliveryPaymentDetails/${encodeURIComponent(jobId)}`, {
+      method: 'GET',
+      headers: makeHeaders(appToken, userToken, false)
+    });
+    return { result: json?.Result || json?.result || null, error: null };
+  } catch (err) {
+    console.error('[orders] payment enrichment failed', jobId, err.message);
+    return { result: null, error: `payment: ${err.message}` };
+  }
 }
 
 function isOrderStartInsideWindow(order, startMs, endMs) {
@@ -301,7 +340,7 @@ async function upstreamJson(url, init) {
   return json;
 }
 
-function normalizeOrder(order, stepsResult, stepsError) {
+function normalizeOrder(order, stepsResult, jobDetailsResult, paymentResult, enrichError) {
   const stops = Array.isArray(stepsResult?.stops) ? stepsResult.stops : [];
   const pickup = stops.find(s => (s.tasks || []).some(t => String(t.task_type || '').toLowerCase() === 'pickup')) || null;
   const dropoff = stops.find(s => (s.tasks || []).some(t => ['drop','dropoff','delivery'].includes(String(t.task_type || '').toLowerCase()))) || null;
@@ -311,6 +350,16 @@ function normalizeOrder(order, stepsResult, stepsError) {
   const firstCarrier = carrierDetails[0] || null;
   const firstCarrierDriver = Array.isArray(firstCarrier?.Drivers) ? firstCarrier.Drivers[0] : null;
   const assignedDriverId = order.DriverId || order.driverId || firstCarrier?.DriverId || firstCarrier?.driverId || null;
+  const jobDetails = Array.isArray(jobDetailsResult?.JobData) ? jobDetailsResult.JobData[0] : null;
+  const jobOrders = Array.isArray(jobDetails?.orders) ? jobDetails.orders : [];
+  const matchedJobOrder = jobOrders.find(jo => String(jo.id || jo.orderid || jo.OrderId || '') === String(order.OrderId || order.orderId || '')) || jobOrders[0] || null;
+  const orderCost = sumMoney(jobOrders.map(jo => jo?.cost_of_goods ?? jo?.CostOfGoods ?? jo?.CostOfGood));
+  const driverTotalPay = asNumber(paymentResult?.total ?? jobDetails?.totalamount);
+  const pickupLat = pickup ? Number(pickup.latitude) : NaN;
+  const pickupLng = pickup ? Number(pickup.longitude) : NaN;
+  const dropoffLat = dropoff ? Number(dropoff.latitude) : NaN;
+  const dropoffLng = dropoff ? Number(dropoff.longitude) : NaN;
+  const distanceMiles = distanceMilesBetween(pickupLat, pickupLng, dropoffLat, dropoffLng);
   const assignedDriverName = firstCarrier?.CarrierDriverName
     || [firstCarrierDriver?.FirstName, firstCarrierDriver?.LastName].filter(Boolean).join(' ')
     || order.DriverName
@@ -334,25 +383,79 @@ function normalizeOrder(order, stepsResult, stepsError) {
     carrierDriverName: firstCarrier?.CarrierDriverName || '',
     carrierDeliveryId: firstCarrier?.CarrierDeliveryId || '',
     lastEvent: order.LastEvent || '',
+    orderCost: Number.isFinite(orderCost) ? orderCost : null,
+    orderCostCurrency: '$',
+    orderTip: asNullableNumber(matchedJobOrder?.tip),
+    distanceMiles: Number.isFinite(distanceMiles) ? distanceMiles : null,
+    driverTotalPay: asNullableNumber(driverTotalPay),
+    driverTotalPayCurrency: paymentResult?.currencysymbol || '$',
+    driverPayBreakdown: paymentResult ? {
+      totalMiles: asNullableNumber(paymentResult.totalmiles),
+      mileageFee: asNullableNumber(paymentResult.mileagefee),
+      totalTip: asNullableNumber(paymentResult.totaltip),
+      otherFee: asNullableNumber(paymentResult.otherfee),
+      postTips: asNullableNumber(paymentResult.posttips),
+      cancellationFee: asNullableNumber(paymentResult.cancellationfee)
+    } : null,
     pickup: pickup ? {
       address: pickup.address || '',
-      lat: Number(pickup.latitude),
-      lng: Number(pickup.longitude),
+      lat: pickupLat,
+      lng: pickupLng,
       entityName: pickupTask?.entity?.name || pickupTask?.entity?.brand_name || order.BrandName || '',
       phone: pickupTask?.entity?.phone || '',
       status: pickup.status || pickupTask?.Status || ''
     } : null,
     dropoff: dropoff ? {
       address: dropoff.address || '',
-      lat: Number(dropoff.latitude),
-      lng: Number(dropoff.longitude),
+      lat: dropoffLat,
+      lng: dropoffLng,
       customerName: dropoffTask?.entity?.customer_name || '',
       phone: dropoffTask?.entity?.customer_phonenumber || '',
       status: dropoff.status || dropoffTask?.Status || ''
     } : null,
     stops,
-    stepsError: stepsError || null
+    stepsError: enrichError || null
   };
+}
+
+
+function distanceMilesBetween(lat1, lng1, lat2, lng2) {
+  const nums = [lat1, lng1, lat2, lng2].map(Number);
+  if (nums.some(n => !Number.isFinite(n))) return NaN;
+  const [aLat, aLng, bLat, bLng] = nums;
+  const R = 3958.7613;
+  const toRad = deg => deg * Math.PI / 180;
+  const dLat = toRad(bLat - aLat);
+  const dLng = toRad(bLng - aLng);
+  const s1 = Math.sin(dLat / 2);
+  const s2 = Math.sin(dLng / 2);
+  const h = s1 * s1 + Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * s2 * s2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+
+function asNumber(value) {
+  if (value === null || value === undefined || value === '') return NaN;
+  const n = Number(String(value).replace(/[^0-9.-]/g, ''));
+  return Number.isFinite(n) ? n : NaN;
+}
+
+function asNullableNumber(value) {
+  const n = asNumber(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function sumMoney(values) {
+  let total = 0;
+  let found = false;
+  for (const value of values || []) {
+    const n = asNumber(value);
+    if (Number.isFinite(n)) {
+      total += n;
+      found = true;
+    }
+  }
+  return found ? total : NaN;
 }
 
 async function mapLimit(items, limit, fn) {
