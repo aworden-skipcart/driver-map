@@ -517,7 +517,19 @@ async function loadDrivers() {
     const r = await fetch(url, {
       headers: { 'X-Apptoken': Session.token, 'Accept': 'application/json' }
     });
-    if (r.status === 401 || r.status === 403) throw new Error('Unauthorized — please log in again');
+
+    if (r.status === 401 || r.status === 403) {
+      // Try to surface diagnostic info from the response body
+      let detail = '';
+      try {
+        const errJson = await r.json();
+        console.error('[drivers] 401 debug:', errJson);
+        if (errJson.debug) {
+          detail = ` (supplied: ${errJson.debug.suppliedLen}ch, expected: ${errJson.debug.expectedLen}ch, hasHeader: ${errJson.debug.hasHeader})`;
+        }
+      } catch {}
+      throw new Error('Unauthorized — please log in again' + detail);
+    }
     if (!r.ok) throw new Error('Request failed (' + r.status + ')');
 
     const json = await r.json();
@@ -526,7 +538,8 @@ async function loadDrivers() {
   } catch (e) {
     console.error(e);
     setStatus('Error: ' + e.message, 'error');
-    if (/unauthorized/i.test(e.message)) setTimeout(logout, 1500);
+    // Don't auto-logout on first 401 — let the user see the debug message
+    if (/unauthorized/i.test(e.message) && !/supplied/.test(e.message)) setTimeout(logout, 1500);
   } finally {
     document.getElementById('loadBtn').disabled = false;
     document.getElementById('refreshBtn').disabled = false;
