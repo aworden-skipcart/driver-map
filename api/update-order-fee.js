@@ -2,10 +2,10 @@
 //
 // POST /api/update-order-fee
 // Required header: X-Usertoken: <JWT from /api/auth>
-// Body: { jobId, amountToAdd }
+// Body: { jobId, desiredOtherFee }
 //
-// Adds to the job's OtherFee using DeliveryPaymentDetails + UpdateJobFee.
-// Safety guard: a single update cannot add more than $30.00.
+// Sets the job's OtherFee to the desired total using DeliveryPaymentDetails + UpdateJobFee.
+// Safety guard: a single update cannot increase the OtherFee by more than $30.00.
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -33,21 +33,29 @@ export default async function handler(req, res) {
   }
 
   const jobId = cleanInt(body?.jobId);
-  const amountToAdd = cleanMoney(body?.amountToAdd);
+  const desiredOtherFeeFromBody = cleanMoney(body?.desiredOtherFee);
+  const legacyAmountToAdd = cleanMoney(body?.amountToAdd);
   if (!jobId) return res.status(400).json({ error: 'jobId is required' });
-  if (!Number.isFinite(amountToAdd) || amountToAdd <= 0) {
-    return res.status(400).json({ error: 'Amount to add must be greater than $0.00' });
-  }
-  if (amountToAdd > 30) {
-    return res.status(400).json({ error: 'Cannot add more than $30.00 to an order' });
-  }
 
   try {
     const headers = makeHeaders(APPTOKEN, userToken, false);
     const before = await fetchPaymentDetails(jobId, headers);
     const oldOtherFee = asNumber(before?.otherfee) || 0;
     const oldTotal = asNumber(before?.total) || 0;
-    const newOtherFee = round2(oldOtherFee + amountToAdd);
+    const desiredOtherFee = Number.isFinite(desiredOtherFeeFromBody)
+      ? round2(desiredOtherFeeFromBody)
+      : (Number.isFinite(legacyAmountToAdd) ? round2(oldOtherFee + legacyAmountToAdd) : NaN);
+    if (!Number.isFinite(desiredOtherFee) || desiredOtherFee < 0) {
+      return res.status(400).json({ error: 'Desired Other Fee is required' });
+    }
+    const amountToAdd = round2(desiredOtherFee - oldOtherFee);
+    if (amountToAdd <= 0) {
+      return res.status(400).json({ error: 'Desired Other Fee must be greater than the current Other Fee', oldOtherFee, desiredOtherFee });
+    }
+    if (amountToAdd > 30) {
+      return res.status(400).json({ error: 'Cannot add more than $30.00 to an order', oldOtherFee, desiredOtherFee, amountToAdd });
+    }
+    const newOtherFee = desiredOtherFee;
     const expectedNewTotal = round2(oldTotal + amountToAdd);
     const orders = buildOrdersPayload(before?.ordersdata);
 
@@ -78,9 +86,10 @@ export default async function handler(req, res) {
     const after = await fetchPaymentDetails(jobId, headers).catch(() => null);
     return res.status(200).json({
       status: true,
-      message: `Added $${amountToAdd.toFixed(2)} to Other Fee`,
+      message: `Set Other Fee to $${newOtherFee.toFixed(2)} (+$${amountToAdd.toFixed(2)})`,
       jobId: String(jobId),
       amountAdded: amountToAdd,
+      desiredOtherFee: newOtherFee,
       oldOtherFee,
       newOtherFee,
       oldTotal,
