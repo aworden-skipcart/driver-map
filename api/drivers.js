@@ -1,7 +1,14 @@
 // /api/drivers.js
 //
 // GET /api/drivers?regionId=58
-// Required header: X-Apptoken: <the apptoken handed back by /api/auth>
+// Required header: X-Usertoken: <JWT from /api/auth>
+//
+// Skipcart's dash-api requires BOTH:
+//   - AppToken  : the static app-level UUID (server-side env var)
+//   - UserToken : the per-user JWT minted by auth2/Admin (passed by browser)
+//
+// So each user is authenticated as themselves on every upstream call —
+// no shared session, audit trails preserve their identity.
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -15,35 +22,27 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Server misconfigured', reason: 'apptoken_missing' });
   }
 
-  // Node lowercases incoming header names, but be defensive.
-  const raw =
-       req.headers['x-apptoken']
-    || req.headers['X-Apptoken']
+  const rawUser =
+       req.headers['x-usertoken']
+    || req.headers['X-Usertoken']
+    || req.headers['x-user-token']
     || '';
-  const supplied = String(raw).trim();
+  const userToken = String(rawUser).trim();
 
-  // Diagnostic logging — visible in Vercel function logs
-  console.log('[drivers] received request', {
-    hasHeader: !!supplied,
-    suppliedLen: supplied.length,
-    expectedLen: APPTOKEN.length,
-    suppliedPrefix: supplied.slice(0, 8),
-    expectedPrefix: APPTOKEN.slice(0, 8),
-    match: supplied === APPTOKEN,
-    headerKeys: Object.keys(req.headers).filter(k =>
-      k.toLowerCase().includes('apptoken') || k.toLowerCase().includes('auth'))
-  });
-
-  if (!supplied || !safeEqual(supplied, APPTOKEN)) {
-    return res.status(401).json({
-      error: 'Unauthorized',
-      debug: {
-        suppliedLen: supplied.length,
-        expectedLen: APPTOKEN.length,
-        hasHeader: !!supplied,
-        match: supplied === APPTOKEN
-      }
+  if (!userToken) {
+    console.log('[drivers] missing user token', {
+      headerKeys: Object.keys(req.headers).filter(k =>
+        k.toLowerCase().includes('token') || k.toLowerCase().includes('auth'))
     });
+    return res.status(401).json({ error: 'Unauthorized', reason: 'no_user_token' });
+  }
+
+  // Sanity-check that it looks like a JWT (3 base64url segments).
+  // Don't validate the signature — Skipcart will do that.
+  const jwtShape = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
+  if (!jwtShape.test(userToken)) {
+    console.log('[drivers] user token failed shape check', { len: userToken.length });
+    return res.status(401).json({ error: 'Unauthorized', reason: 'bad_token_shape' });
   }
 
   const regionId = req.query?.regionId;
@@ -59,10 +58,11 @@ export default async function handler(req, res) {
   try {
     const r = await fetch(target, {
       headers: {
-        'Apptoken': APPTOKEN,
-        'Accept':   'application/json',
-        'Origin':   'https://live.skipcart.com',
-        'Referer':  'https://live.skipcart.com/'
+        'Apptoken':  APPTOKEN,
+        'UserToken': userToken,
+        'Accept':    'application/json',
+        'Origin':    'https://live.skipcart.com',
+        'Referer':   'https://live.skipcart.com/'
       }
     });
 
@@ -70,7 +70,12 @@ export default async function handler(req, res) {
 
     if (!r.ok) {
       console.error('[drivers] upstream error', r.status, text.slice(0, 200));
-      return res.status(r.status).json({ error: 'Upstream error', status: r.status });
+      // Pass through 401s so the browser knows to log out and re-auth
+      return res.status(r.status).json({
+        error: 'Upstream error',
+        status: r.status,
+        upstream: tryParse(text)
+      });
     }
 
     res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=60');
@@ -82,9 +87,6 @@ export default async function handler(req, res) {
   }
 }
 
-function safeEqual(a, b) {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
+function tryParse(s) {
+  try { return JSON.parse(s); } catch { return s.slice(0, 200); }
 }
