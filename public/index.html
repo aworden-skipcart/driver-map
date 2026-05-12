@@ -176,6 +176,8 @@
   .drop-pin { background: var(--danger); color: #020617; border: 2px solid #fff; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 10px; }
   .popup-link { color: var(--cyan); text-decoration: none; }
   .popup-link:hover { text-decoration: underline; }
+  .scheduled-line { color: var(--text); background: rgba(245,158,11,.08); border: 1px solid rgba(245,158,11,.18); border-radius: 6px; padding: 5px 6px; line-height: 1.3; }
+  .conflict-line { color: var(--danger); background: var(--danger-bg); border: 1px solid rgba(248,113,113,.22); border-radius: 6px; padding: 6px; line-height: 1.3; }
 
   @media (max-width: 980px) {
     body.app-mode #appScreen { grid-template-columns: 300px 1fr; grid-template-rows: 1fr 310px; }
@@ -283,6 +285,7 @@
         <label class="checkbox-row"><input type="checkbox" id="filterOnJob" checked> <span><span class="status-dot dot-on-job"></span>On Job</span></label>
         <label class="checkbox-row"><input type="checkbox" id="filterOffline"> <span><span class="status-dot dot-offline"></span>Offline</span></label>
         <label class="checkbox-row"><input type="checkbox" id="filterCatering" checked> <span>Catering cohort only</span></label>
+        <label class="checkbox-row"><input type="checkbox" id="filterScheduledConflicts" checked> <span>Hide scheduled conflicts during assign</span></label>
 
         <label class="app-label" for="searchBox" style="margin-top: 12px;">Search</label>
         <input id="searchBox" class="app-input" placeholder="ID, name, phone, zone..." />
@@ -298,6 +301,7 @@
           <div class="stat"><div class="stat-value" id="statShown">0</div><div class="stat-label">Shown</div></div>
           <div class="stat"><div class="stat-value" id="statOnline">0</div><div class="stat-label">Online</div></div>
           <div class="stat"><div class="stat-value" id="statOnJob">0</div><div class="stat-label">On Job</div></div>
+          <div class="stat"><div class="stat-value" id="statScheduled">0</div><div class="stat-label">Scheduled</div></div>
         </div>
       </div>
 
@@ -317,7 +321,7 @@
   <aside id="ordersPanel">
     <div class="orders-header">
       <div class="orders-title">Orders</div>
-      <div class="orders-sub" id="ordersSub">New ezCater pickup map</div>
+      <div class="orders-sub" id="ordersSub">New + scheduled ezCater coverage</div>
     </div>
     <div class="orders-controls">
       <label class="app-label" for="ordersWindow">Window</label>
@@ -331,7 +335,7 @@
       <div class="assign-banner" id="assignBanner"></div>
     </div>
     <div class="orders-list" id="ordersList">
-      <div class="order-row" style="color: var(--muted); padding: 6px;">Load orders to map New ezCater pickups.</div>
+      <div class="order-row" style="color: var(--muted); padding: 6px;">Load orders to map New ezCater pickups and scheduled-driver conflicts.</div>
     </div>
   </aside>
 </div>
@@ -421,7 +425,9 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
   }
 });
 
-let map, cluster, orderLayer, routeLayer, allFeatures = [], allMarkers = [], allOrders = [], orderMarkers = [], selectedAssignOrderId = null;
+let map, cluster, orderLayer, routeLayer,
+    allFeatures = [], allMarkers = [], allOrders = [], scheduledOrders = [],
+    orderMarkers = [], selectedAssignOrderId = null;
 
 function enterApp() {
   document.body.classList.add('app-mode');
@@ -470,7 +476,7 @@ function bindAppEvents() {
   document.getElementById('logoutBtn').addEventListener('click', logout);
   document.getElementById('loadOrdersBtn').addEventListener('click', loadOrders);
   document.getElementById('clearOrdersBtn').addEventListener('click', clearOrders);
-  ['filterOnline','filterOnJob','filterOffline','filterCatering','searchBox','zoneFilter'].forEach(id => {
+  ['filterOnline','filterOnJob','filterOffline','filterCatering','filterScheduledConflicts','searchBox','zoneFilter'].forEach(id => {
     const el = document.getElementById(id);
     el.addEventListener('input', rebuildMarkers);
     el.addEventListener('change', rebuildMarkers);
@@ -525,24 +531,93 @@ function escapeHtml(v) {
   return String(v ?? '').replace(/[&<>"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]));
 }
 
+function dateMs(v) {
+  if (!v) return NaN;
+  const d = new Date(String(v));
+  return isFinite(d.getTime()) ? d.getTime() : NaN;
+}
+function orderStartMs(o) { return dateMs(o?.delWindowStart); }
+function orderEndMs(o) { return dateMs(o?.delWindowEnd) || orderStartMs(o); }
+function driverIdValue(p) { return String(p?.DriverId ?? p?.driverId ?? '').trim(); }
+function orderDriverIdValue(o) { return String(o?.driverId ?? o?.DriverId ?? '').trim(); }
+function getScheduledForDriver(driverId) {
+  const id = String(driverId || '').trim();
+  if (!id) return [];
+  return scheduledOrders.filter(o => String(orderDriverIdValue(o)) === id);
+}
+function isScheduledNext24(o) {
+  const start = orderStartMs(o);
+  if (!Number.isFinite(start)) return false;
+  const now = Date.now();
+  return start >= now && start <= now + 24 * 60 * 60 * 1000;
+}
+function getDriverScheduledNext24(p) {
+  return getScheduledForDriver(driverIdValue(p)).filter(isScheduledNext24).sort((a, b) => orderStartMs(a) - orderStartMs(b));
+}
+function getConflictWindowForOrder(o) {
+  const start = orderStartMs(o);
+  const end = orderEndMs(o);
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+  return { start: start - 60 * 60 * 1000, end: end + 60 * 60 * 1000 };
+}
+function scheduledOrderOverlaps(o, window) {
+  if (!window) return false;
+  const start = orderStartMs(o);
+  const end = orderEndMs(o);
+  if (!Number.isFinite(start) && !Number.isFinite(end)) return false;
+  const a = Number.isFinite(start) ? start : end;
+  const b = Number.isFinite(end) ? end : start;
+  return a <= window.end && b >= window.start;
+}
+function getSelectedAssignOrder() {
+  return selectedAssignOrderId ? allOrders.find(o => String(o.orderId) === String(selectedAssignOrderId)) : null;
+}
+function getDriverConflictsForOrder(p, order) {
+  const window = getConflictWindowForOrder(order);
+  return getScheduledForDriver(driverIdValue(p)).filter(o => scheduledOrderOverlaps(o, window));
+}
+function driverHasConflictForSelectedOrder(p) {
+  const selected = getSelectedAssignOrder();
+  return !!selected && getDriverConflictsForOrder(p, selected).length > 0;
+}
+function scheduledSummary(o) {
+  const driver = o.driverName ? ` · ${o.driverName}` : '';
+  return `${o.brandName || 'ezCater'} #${o.orderId || '—'}${driver} · ${fmtDateTime(o.delWindowStart)}–${fmtDateTime(o.delWindowEnd)}`;
+}
+
 function buildPopup(p) {
   const cls = classify(p);
   const label = cls === 'on-job' ? 'On Job' : cls === 'online' ? 'Online' : 'Offline';
   const score = p.ScoreCard || {};
   const cohorts = getDriverCohorts(p);
-  const selectedOrder = selectedAssignOrderId ? allOrders.find(o => String(o.orderId) === String(selectedAssignOrderId)) : null;
-  const canOffer = selectedOrder && hasCateringCohort(p) && selectedOrder.jobId && selectedOrder.orderId;
+  const selectedOrder = getSelectedAssignOrder();
+  const scheduledNext24 = getDriverScheduledNext24(p);
+  const selectedConflicts = selectedOrder ? getDriverConflictsForOrder(p, selectedOrder) : [];
+  const hasConflict = selectedConflicts.length > 0;
+  const canOffer = selectedOrder && hasCateringCohort(p) && !hasConflict && selectedOrder.jobId && selectedOrder.orderId;
+  const scheduledBlock = scheduledNext24.length ? `
+      <div class="popup-row" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);color:var(--on-job);">
+        <strong>Scheduled</strong> ${escapeHtml(scheduledNext24.length)} ezCater next 24h
+      </div>
+      ${scheduledNext24.slice(0, 3).map(o => `<div class="popup-row scheduled-line">${escapeHtml(scheduledSummary(o))}</div>`).join('')}` : '';
+  const conflictBlock = hasConflict ? `
+      <div class="popup-row conflict-line">
+        <strong>Conflict</strong> Already scheduled within ±1 hour of the selected order window.
+      </div>
+      ${selectedConflicts.slice(0, 2).map(o => `<div class="popup-row scheduled-line">${escapeHtml(scheduledSummary(o))}</div>`).join('')}` : '';
   const assignBlock = selectedOrder ? `
       <div class="popup-row" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
-        <strong>Selected</strong> Order ${escapeHtml(selectedOrder.orderId)}
+        <strong>Selected</strong> Order ${escapeHtml(selectedOrder.orderId)} · ${escapeHtml(fmtDateTime(selectedOrder.delWindowStart))}–${escapeHtml(fmtDateTime(selectedOrder.delWindowEnd))}
       </div>
+      ${conflictBlock}
       ${canOffer
         ? `<button class="mini-btn popup-assign-driver" data-driver-id="${escapeHtml(p.DriverId)}" data-order-id="${escapeHtml(selectedOrder.orderId)}" style="width:100%;margin-top:6px;">Assign This Driver</button>`
-        : `<div class="popup-row" style="color:var(--danger);">This driver does not show a Catering cohort in the map feed.</div>`}` : '';
+        : `<div class="popup-row" style="color:var(--danger);">${hasCateringCohort(p) ? 'Driver is unavailable for this order window.' : 'This driver does not show a Catering cohort in the map feed.'}</div>`}` : '';
   return `
     <div class="popup-content">
       <div class="popup-name">${escapeHtml(p.Driver_Name || 'Unknown')}
         <span class="popup-status ${cls}" style="margin-left:6px;">${label}</span>
+        ${hasConflict ? '<span class="popup-status on-job" style="margin-left:4px;">Scheduled Conflict</span>' : ''}
       </div>
       <div class="popup-row"><strong>ID</strong> <a class="popup-id popup-link" href="${driverProfileUrl(p.DriverId)}" target="_blank" rel="noopener noreferrer">${escapeHtml(p.DriverId)}</a></div>
       <div class="popup-row"><strong>Phone</strong> ${escapeHtml(p.Phone_Number || '—')}</div>
@@ -553,6 +628,7 @@ function buildPopup(p) {
       <div class="popup-row"><strong>Last Seen</strong> ${escapeHtml(p.Last_Seen_Online || '—')}</div>
       ${score.acceptanceRate !== undefined ? `<div class="popup-row"><strong>Accept</strong> ${escapeHtml(score.acceptanceRate)}% &nbsp; <strong>Complete</strong> ${escapeHtml(score.completionRate)}%</div>` : ''}
       ${cohorts.length ? `<div class="popup-row"><strong>Cohorts</strong> ${escapeHtml(cohorts.join(', '))}</div>` : ''}
+      ${scheduledBlock}
       ${assignBlock}
     </div>`;
 }
@@ -565,21 +641,26 @@ function rebuildMarkers() {
   const showOnJob   = document.getElementById('filterOnJob').checked;
   const showOffline = document.getElementById('filterOffline').checked;
   const cateringOnly = document.getElementById('filterCatering').checked;
+  const hideScheduledConflicts = document.getElementById('filterScheduledConflicts')?.checked;
   const search      = document.getElementById('searchBox').value.trim().toLowerCase();
   const zone        = document.getElementById('zoneFilter').value;
+  const selectedOrder = getSelectedAssignOrder();
 
-  let shown = 0, online = 0, onJob = 0;
+  let shown = 0, online = 0, onJob = 0, scheduled = 0;
 
   for (const f of allFeatures) {
     const p = f.properties;
     const cls = classify(p);
+    const hasConflict = !!selectedOrder && driverHasConflictForSelectedOrder(p);
     if (cls === 'online') online++;
     if (cls === 'on-job') onJob++;
+    if (getDriverScheduledNext24(p).length) scheduled++;
 
     if (cls === 'online' && !showOnline) continue;
     if (cls === 'on-job' && !showOnJob) continue;
     if (cls === 'offline' && !showOffline) continue;
     if (cateringOnly && !hasCateringCohort(p)) continue;
+    if (hideScheduledConflicts && selectedOrder && hasConflict) continue;
     if (zone && p.Zone_Name !== zone) continue;
     if (search) {
       const hay = [p.DriverId, p.Driver_Name, p.Phone_Number, p.Email, p.Zone_Name, p.OrderId].filter(Boolean).join(' ').toLowerCase();
@@ -589,11 +670,12 @@ function rebuildMarkers() {
     const [lng, lat] = f.geometry.coordinates;
     if (!isFinite(lat) || !isFinite(lng)) continue;
 
-    const marker = L.marker([lat, lng], { icon: driverCarIcon(cls, selectedAssignOrderId && hasCateringCohort(p)) });
+    const assignable = selectedAssignOrderId && hasCateringCohort(p) && !hasConflict;
+    const marker = L.marker([lat, lng], { icon: driverCarIcon(cls, assignable) });
     marker.driverProperties = p;
     marker.bindPopup(buildPopup(p));
     marker.on('popupopen', () => bindDriverPopupActions(marker));
-    marker.bindTooltip(`#${p.DriverId} · ${p.Driver_Name || ''}`, { direction: 'top', offset: [0, -6] });
+    marker.bindTooltip(`#${p.DriverId} · ${p.Driver_Name || ''}${hasConflict ? ' · scheduled conflict' : ''}`, { direction: 'top', offset: [0, -6] });
     allMarkers.push(marker);
     shown++;
   }
@@ -604,6 +686,8 @@ function rebuildMarkers() {
   document.getElementById('statShown').textContent  = shown.toLocaleString();
   document.getElementById('statOnline').textContent = online.toLocaleString();
   document.getElementById('statOnJob').textContent  = onJob.toLocaleString();
+  const statScheduled = document.getElementById('statScheduled');
+  if (statScheduled) statScheduled.textContent = scheduled.toLocaleString();
 }
 
 function rebuildZoneFilter() {
@@ -642,11 +726,12 @@ function clearOrders() {
   selectedAssignOrderId = null;
   updateAssignBanner();
   allOrders = [];
+  scheduledOrders = [];
   orderMarkers = [];
   if (orderLayer) orderLayer.clearLayers();
   if (routeLayer) routeLayer.clearLayers();
-  document.getElementById('ordersSub').textContent = 'New ezCater pickup map';
-  document.getElementById('ordersList').innerHTML = '<div class="order-row" style="color: var(--muted); padding: 6px;">Load orders to map New ezCater pickups.</div>';
+  document.getElementById('ordersSub').textContent = 'New + scheduled ezCater coverage';
+  document.getElementById('ordersList').innerHTML = '<div class="order-row" style="color: var(--muted); padding: 6px;">Load orders to map New ezCater pickups and scheduled-driver conflicts.</div>';
   setOrdersStatus('', '');
 }
 
@@ -760,9 +845,11 @@ function renderOrdersList() {
 
 function cateringDriverOptions() {
   const seen = new Set();
+  const selectedOrder = getSelectedAssignOrder();
   return allFeatures
     .map(f => f.properties)
     .filter(p => hasCateringCohort(p))
+    .filter(p => !selectedOrder || !driverHasConflictForSelectedOrder(p))
     .filter(p => {
       if (!p.DriverId || seen.has(String(p.DriverId))) return false;
       seen.add(String(p.DriverId));
@@ -810,7 +897,7 @@ function updateAssignBanner() {
     return;
   }
   const o = allOrders.find(x => String(x.orderId) === String(selectedAssignOrderId));
-  el.textContent = o ? `Assign mode: click a Catering driver car on the map to offer Order ${o.orderId}.` : '';
+  el.textContent = o ? `Assign mode: click an available Catering driver car. Drivers scheduled within ±1 hour of Order ${o.orderId} are hidden when the scheduled-conflict filter is on.` : '';
   el.classList.toggle('show', !!o);
 }
 function bindDriverPopupActions(marker) {
@@ -830,7 +917,11 @@ function bindDriverPopupActions(marker) {
 function findCateringDriver(raw) {
   const q = String(raw || '').trim().toLowerCase();
   if (!q) return null;
-  const candidates = allFeatures.map(f => f.properties).filter(p => hasCateringCohort(p));
+  const selectedOrder = getSelectedAssignOrder();
+  const candidates = allFeatures
+    .map(f => f.properties)
+    .filter(p => hasCateringCohort(p))
+    .filter(p => !selectedOrder || !driverHasConflictForSelectedOrder(p));
   return candidates.find(p => String(p.DriverId).toLowerCase() === q)
       || candidates.find(p => String(p.Driver_Name || '').toLowerCase().includes(q))
       || null;
@@ -857,6 +948,13 @@ async function sendOrderOfferWithDriver(orderId, driverId) {
   }
   if (!hasCateringCohort(driver)) {
     if (status) status.textContent = 'Selected driver does not show a Catering cohort in the driver location feed.';
+    return;
+  }
+  const conflicts = getDriverConflictsForOrder(driver, o);
+  if (conflicts.length) {
+    const msg = `Driver is already scheduled on ezCater within ±1 hour of this order window: ${scheduledSummary(conflicts[0])}`;
+    if (status) status.textContent = msg;
+    setOrdersStatus(msg, 'error');
     return;
   }
   if (status) status.textContent = `Sending offer to ${driver.Driver_Name || driver.DriverId}…`;
@@ -902,7 +1000,7 @@ async function loadOrders() {
 
   const hours = document.getElementById('ordersWindow').value || '12';
   const regionId = document.getElementById('regionId').value.trim();
-  setOrdersStatus('Loading New ezCater orders…', 'info');
+  setOrdersStatus('Loading New + Scheduled ezCater orders…', 'info');
   document.getElementById('loadOrdersBtn').disabled = true;
 
   try {
@@ -913,11 +1011,14 @@ async function loadOrders() {
     selectedAssignOrderId = null;
     updateAssignBanner();
     allOrders = Array.isArray(json.orders) ? json.orders : [];
+    scheduledOrders = Array.isArray(json.scheduledOrders) ? json.scheduledOrders : [];
     mapOrders();
     renderOrdersList();
+    rebuildMarkers();
     const capLabel = json.windowEnd ? ` · no later than ${fmtDateTime(json.windowEnd)}` : '';
+    const scheduledLabel = scheduledOrders.length ? ` · ${scheduledOrders.length.toLocaleString()} scheduled drivers/orders checked` : ' · no scheduled conflicts found';
     document.getElementById('ordersSub').textContent = `${allOrders.length.toLocaleString()} New ezCater orders · next ${hours}h${capLabel}`;
-    setOrdersStatus(`Loaded ${allOrders.length.toLocaleString()} orders${capLabel}`, 'success');
+    setOrdersStatus(`Loaded ${allOrders.length.toLocaleString()} New orders and ${scheduledOrders.length.toLocaleString()} Scheduled orders${capLabel}${scheduledLabel}`, 'success');
   } catch (err) {
     console.error(err);
     setOrdersStatus('Error: ' + err.message, 'error');
