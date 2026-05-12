@@ -176,8 +176,25 @@
   .drop-pin { background: var(--danger); color: #020617; border: 2px solid #fff; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 10px; }
   .popup-link { color: var(--cyan); text-decoration: none; }
   .popup-link:hover { text-decoration: underline; }
-  .scheduled-line { color: var(--text); background: rgba(245,158,11,.08); border: 1px solid rgba(245,158,11,.18); border-radius: 6px; padding: 5px 6px; line-height: 1.3; }
-  .conflict-line { color: var(--danger); background: var(--danger-bg); border: 1px solid rgba(248,113,113,.22); border-radius: 6px; padding: 6px; line-height: 1.3; }
+  .scheduled-panel { margin-top: 10px; padding: 10px; border-radius: 12px; background: linear-gradient(180deg, rgba(245,158,11,.10), rgba(245,158,11,.035)); border: 1px solid rgba(245,158,11,.28); box-shadow: 0 10px 24px rgba(0,0,0,.18); }
+  .scheduled-panel.conflict { background: linear-gradient(180deg, rgba(248,113,113,.13), rgba(248,113,113,.04)); border-color: rgba(248,113,113,.30); }
+  .scheduled-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+  .scheduled-panel-title { display: flex; align-items: center; gap: 7px; color: var(--white); font-size: 11px; font-weight: 800; letter-spacing: .10em; text-transform: uppercase; }
+  .scheduled-icon { width: 20px; height: 20px; border-radius: 999px; display: inline-grid; place-items: center; background: rgba(245,158,11,.18); color: var(--on-job); border: 1px solid rgba(245,158,11,.28); font-size: 12px; }
+  .scheduled-panel.conflict .scheduled-icon { background: rgba(248,113,113,.16); color: var(--danger); border-color: rgba(248,113,113,.26); }
+  .scheduled-count-pill { flex: none; border-radius: 999px; padding: 3px 8px; font-family: 'DM Mono', monospace; font-size: 9px; color: var(--on-job); background: rgba(245,158,11,.12); border: 1px solid rgba(245,158,11,.22); }
+  .scheduled-panel.conflict .scheduled-count-pill { color: var(--danger); background: rgba(248,113,113,.11); border-color: rgba(248,113,113,.24); }
+  .scheduled-note { color: var(--muted); font-size: 11px; line-height: 1.35; margin: 0 0 8px; }
+  .scheduled-card { margin-top: 7px; padding: 9px 10px; border-radius: 10px; background: rgba(3,8,23,.52); border: 1px solid rgba(148,163,184,.16); }
+  .scheduled-card:first-of-type { margin-top: 0; }
+  .scheduled-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+  .scheduled-merchant { color: var(--white); font-weight: 800; font-size: 12px; line-height: 1.25; }
+  .scheduled-order-chip { flex: none; border-radius: 999px; padding: 2px 7px; font-family: 'DM Mono', monospace; font-size: 9px; color: var(--cyan); background: rgba(0,204,255,.10); border: 1px solid rgba(0,204,255,.20); }
+  .scheduled-window { margin-top: 7px; color: var(--text); font-size: 12px; line-height: 1.3; }
+  .scheduled-meta { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 5px; }
+  .scheduled-meta span { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; border-radius: 999px; padding: 2px 7px; color: var(--muted); background: rgba(148,163,184,.08); border: 1px solid rgba(148,163,184,.12); font-size: 9px; line-height: 1.25; }
+  .scheduled-more { margin-top: 7px; color: var(--muted); font-size: 10px; font-style: italic; }
+  .conflict-line { color: var(--danger); background: var(--danger-bg); border: 1px solid rgba(248,113,113,.22); border-radius: 8px; padding: 8px; line-height: 1.35; }
 
   @media (max-width: 980px) {
     body.app-mode #appScreen { grid-template-columns: 300px 1fr; grid-template-rows: 1fr 310px; }
@@ -557,6 +574,42 @@ function dateMs(v) {
 }
 function orderStartMs(o) { return dateMs(o?.delWindowStart); }
 function orderEndMs(o) { return dateMs(o?.delWindowEnd) || orderStartMs(o); }
+function distanceMilesBetween(lat1, lng1, lat2, lng2) {
+  const nums = [lat1, lng1, lat2, lng2].map(Number);
+  if (nums.some(n => !Number.isFinite(n))) return NaN;
+  const [aLat, aLng, bLat, bLng] = nums;
+  const R = 3958.7613;
+  const toRad = deg => deg * Math.PI / 180;
+  const dLat = toRad(bLat - aLat);
+  const dLng = toRad(bLng - aLng);
+  const s1 = Math.sin(dLat / 2);
+  const s2 = Math.sin(dLng / 2);
+  const h = s1 * s1 + Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * s2 * s2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+function driverLatLngFromFeature(f) {
+  const coords = f?.geometry?.coordinates;
+  if (!Array.isArray(coords) || coords.length < 2) return null;
+  const lng = Number(coords[0]);
+  const lat = Number(coords[1]);
+  return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+}
+function driverDistanceToOrderMiles(featureOrProps, order) {
+  if (!orderHasPickup(order)) return NaN;
+  let latLng = null;
+  if (featureOrProps?.geometry) latLng = driverLatLngFromFeature(featureOrProps);
+  else {
+    const feature = allFeatures.find(f => String(driverIdValue(f.properties)) === String(driverIdValue(featureOrProps)));
+    latLng = driverLatLngFromFeature(feature);
+  }
+  if (!latLng) return NaN;
+  return distanceMilesBetween(latLng.lat, latLng.lng, order.pickup.lat, order.pickup.lng);
+}
+function fmtMiles(mi) {
+  if (!Number.isFinite(mi)) return 'distance unknown';
+  if (mi < 10) return `${mi.toFixed(1)} mi`;
+  return `${Math.round(mi)} mi`;
+}
 function driverIdValue(p) { return String(p?.DriverId ?? p?.driverId ?? '').trim(); }
 function orderDriverIdValue(o) { return String(o?.driverId ?? o?.DriverId ?? '').trim(); }
 function getScheduledForDriver(driverId) {
@@ -603,6 +656,42 @@ function scheduledSummary(o) {
   const driver = o.driverName ? ` · ${o.driverName}` : '';
   return `${o.brandName || 'ezCater'} #${o.orderId || '—'}${driver} · ${fmtTimeWindow(o.delWindowStart, o.delWindowEnd)}`;
 }
+function scheduledCard(o) {
+  const merchant = o.brandName || o.pickup?.entityName || 'ezCater order';
+  const orderId = o.orderId || '—';
+  const driver = o.driverName || o.carrierDriverName || '';
+  const zone = o.zoneName || o.areaName || '';
+  const ext = o.externalOrderId || '';
+  const meta = [
+    driver ? `<span>Driver ${escapeHtml(driver)}</span>` : '',
+    zone ? `<span>${escapeHtml(zone)}</span>` : '',
+    ext ? `<span>Ext ${escapeHtml(ext)}</span>` : ''
+  ].filter(Boolean).join('');
+  return `
+    <div class="scheduled-card">
+      <div class="scheduled-card-top">
+        <div class="scheduled-merchant">${escapeHtml(merchant)}</div>
+        <div class="scheduled-order-chip">#${escapeHtml(orderId)}</div>
+      </div>
+      <div class="scheduled-window">${escapeHtml(fmtTimeWindow(o.delWindowStart, o.delWindowEnd))}</div>
+      ${meta ? `<div class="scheduled-meta">${meta}</div>` : ''}
+    </div>`;
+}
+function scheduledPanelHtml(items, title, note, isConflict = false, limit = 3) {
+  if (!items.length) return '';
+  const visible = items.slice(0, limit);
+  const more = items.length > visible.length ? `<div class="scheduled-more">+${escapeHtml(items.length - visible.length)} more scheduled order${items.length - visible.length === 1 ? '' : 's'}</div>` : '';
+  return `
+    <div class="scheduled-panel${isConflict ? ' conflict' : ''}">
+      <div class="scheduled-panel-head">
+        <div class="scheduled-panel-title"><span class="scheduled-icon">${isConflict ? '!' : '📅'}</span><span>${escapeHtml(title)}</span></div>
+        <div class="scheduled-count-pill">${escapeHtml(items.length)} order${items.length === 1 ? '' : 's'}</div>
+      </div>
+      ${note ? `<div class="scheduled-note">${escapeHtml(note)}</div>` : ''}
+      ${visible.map(o => scheduledCard(o)).join('')}
+      ${more}
+    </div>`;
+}
 
 function buildPopup(p) {
   const cls = classify(p);
@@ -614,16 +703,20 @@ function buildPopup(p) {
   const selectedConflicts = selectedOrder ? getDriverConflictsForOrder(p, selectedOrder) : [];
   const hasConflict = selectedConflicts.length > 0;
   const canOffer = selectedOrder && hasCateringCohort(p) && !hasConflict && selectedOrder.jobId && selectedOrder.orderId;
-  const scheduledBlock = scheduledNext24.length ? `
-      <div class="popup-row" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);color:var(--on-job);">
-        <strong>Scheduled</strong> ${escapeHtml(scheduledNext24.length)} ezCater next 24h
-      </div>
-      ${scheduledNext24.slice(0, 3).map(o => `<div class="popup-row scheduled-line">${escapeHtml(scheduledSummary(o))}</div>`).join('')}` : '';
-  const conflictBlock = hasConflict ? `
-      <div class="popup-row conflict-line">
-        <strong>Conflict</strong> Already scheduled within ±1 hour of the selected order window.
-      </div>
-      ${selectedConflicts.slice(0, 2).map(o => `<div class="popup-row scheduled-line">${escapeHtml(scheduledSummary(o))}</div>`).join('')}` : '';
+  const scheduledBlock = scheduledPanelHtml(
+    scheduledNext24,
+    'Scheduled',
+    'ezCater assignments in the next 24 hours',
+    false,
+    3
+  );
+  const conflictBlock = hasConflict ? scheduledPanelHtml(
+    selectedConflicts,
+    'Conflict',
+    'Already scheduled within ±1 hour of the selected order window.',
+    true,
+    2
+  ) : '';
   const assignBlock = selectedOrder ? `
       <div class="popup-row" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
         <strong>Selected</strong> Order ${escapeHtml(selectedOrder.orderId)} · ${escapeHtml(fmtTimeWindow(selectedOrder.delWindowStart, selectedOrder.delWindowEnd))}
@@ -851,7 +944,7 @@ function renderOrdersList() {
           <button class="mini-btn" data-action="assign" data-order-id="${escapeHtml(o.orderId)}" ${canAssign ? '' : 'disabled'}>${activeAssign ? 'Assign Mode On' : 'Assign'}</button>
         </div>
         <div class="assign-box ${activeAssign ? 'show' : ''}" id="assign-${escapeHtml(o.orderId)}">
-          <div class="assign-hint">Search below, or click a Catering driver car on the map and use <strong>Assign This Driver</strong> from the driver info panel.</div>
+          <div class="assign-hint">Search below — closest drivers appear first with miles from pickup — or click a Catering driver car on the map and use <strong>Assign This Driver</strong> from the driver info panel.</div>
           <label class="app-label" for="driver-${escapeHtml(o.orderId)}">Catering driver</label>
           <input class="app-input assign-driver-search" id="driver-${escapeHtml(o.orderId)}" data-order-id="${escapeHtml(o.orderId)}" list="cateringDrivers" placeholder="Search/select driver ID or name..." />
           <button class="mini-btn" data-action="send" data-order-id="${escapeHtml(o.orderId)}" style="margin-top:6px;width:100%;">Send Offer</button>
@@ -886,16 +979,27 @@ function cateringDriverOptions() {
   const seen = new Set();
   const selectedOrder = getSelectedAssignOrder();
   return allFeatures
-    .map(f => f.properties)
-    .filter(p => hasCateringCohort(p))
-    .filter(p => !selectedOrder || !driverHasConflictForSelectedOrder(p))
-    .filter(p => {
-      if (!p.DriverId || seen.has(String(p.DriverId))) return false;
-      seen.add(String(p.DriverId));
+    .map(f => ({ feature: f, p: f.properties, distanceMiles: driverDistanceToOrderMiles(f, selectedOrder) }))
+    .filter(x => hasCateringCohort(x.p))
+    .filter(x => !selectedOrder || !driverHasConflictForSelectedOrder(x.p))
+    .filter(x => {
+      const id = driverIdValue(x.p);
+      if (!id || seen.has(id)) return false;
+      seen.add(id);
       return true;
     })
-    .sort((a, b) => String(a.Driver_Name || '').localeCompare(String(b.Driver_Name || '')))
-    .map(p => `<option value="${escapeHtml(p.DriverId)}">${escapeHtml(p.Driver_Name || '')} · ${escapeHtml(p.Zone_Name || '')}</option>`)
+    .sort((a, b) => {
+      const aKnown = Number.isFinite(a.distanceMiles);
+      const bKnown = Number.isFinite(b.distanceMiles);
+      if (selectedOrder && aKnown && bKnown && a.distanceMiles !== b.distanceMiles) return a.distanceMiles - b.distanceMiles;
+      if (selectedOrder && aKnown !== bKnown) return aKnown ? -1 : 1;
+      return String(a.p.Driver_Name || '').localeCompare(String(b.p.Driver_Name || ''));
+    })
+    .map(x => {
+      const p = x.p;
+      const distanceLabel = selectedOrder ? ` · ${fmtMiles(x.distanceMiles)} from pickup` : '';
+      return `<option value="${escapeHtml(driverIdValue(p))}">${escapeHtml(p.Driver_Name || '')} · ${escapeHtml(p.Zone_Name || '')}${escapeHtml(distanceLabel)}</option>`;
+    })
     .join('');
 }
 
