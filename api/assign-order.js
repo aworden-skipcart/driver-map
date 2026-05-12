@@ -47,7 +47,7 @@ export default async function handler(req, res) {
       headers: {
         'AppToken': APPTOKEN,
         'UserToken': userToken,
-        'Accept': 'application/json',
+        'Accept': 'application/json, text/plain, */*',
         'Content-Type': 'application/json; charset=utf-8',
         'Origin': 'https://live.skipcart.com',
         'Referer': 'https://live.skipcart.com/'
@@ -63,7 +63,15 @@ export default async function handler(req, res) {
 
     // Skipcart often returns HTTP 200 with status/status_code carrying the true outcome.
     const ok = json?.status === true || json?.Status === true || json?.result === true || json?.Result === true;
-    return res.status(ok ? 200 : 400).json(json);
+    if (!ok) {
+      return res.status(400).json({
+        error: json?.message || json?.Message || 'Assignment rejected by Skipcart',
+        reason: 'upstream_business_rule',
+        attempted: { jobId, driverId, orderId },
+        upstream: json
+      });
+    }
+    return res.status(200).json(json);
   } catch (err) {
     console.error('[assign-order] proxy error:', err);
     return res.status(502).json({ error: 'Could not reach assignment API' });
