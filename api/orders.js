@@ -248,15 +248,29 @@ function parseSkipcartDateMs(value) {
   const raw = String(value).trim();
   if (!raw) return NaN;
 
-  const direct = Date.parse(raw);
-  if (Number.isFinite(direct)) return direct;
-
-  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?$/.test(raw)) {
+  // Skipcart order-window values represent UTC. Some fields include a trailing
+  // Z, while others are timezone-less ISO strings. Parse the timezone-less
+  // order windows as UTC so filtering and conflict math match dispatch.
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,7})?)?$/.test(raw)) {
     const asUtc = Date.parse(raw + 'Z');
     if (Number.isFinite(asUtc)) return asUtc;
   }
 
+  const direct = Date.parse(raw);
+  if (Number.isFinite(direct)) return direct;
+
   return NaN;
+}
+
+function normalizeSkipcartDateString(...values) {
+  for (const value of values) {
+    if (!value) continue;
+    const raw = String(value).trim();
+    if (!raw) continue;
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,7})?)?$/.test(raw)) return raw + 'Z';
+    return raw;
+  }
+  return '';
 }
 
 function makeHeaders(appToken, userToken, isJson) {
@@ -313,8 +327,8 @@ function normalizeOrder(order, stepsResult, stepsError) {
     regionName: order.RegionName || '',
     zoneName: order.ZoneName || '',
     areaName: Array.isArray(order.AreaData) && order.AreaData[0] ? order.AreaData[0].areaname : '',
-    delWindowStart: order.DelWindowStartString || order.DelWindowStart || '',
-    delWindowEnd: order.DelWindowEndString || order.DelWindowEnd || '',
+    delWindowStart: normalizeSkipcartDateString(order.DelWindowStartString, order.DelWindowStart, pickupTask?.scheduled_at),
+    delWindowEnd: normalizeSkipcartDateString(order.DelWindowEndString, order.DelWindowEnd, dropoffTask?.scheduled_at),
     driverId: assignedDriverId,
     driverName: assignedDriverName,
     carrierDriverName: firstCarrier?.CarrierDriverName || '',
