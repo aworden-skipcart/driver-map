@@ -108,6 +108,11 @@
   .app-input, .app-select { width: 100%; height: 34px; padding: 0 10px; background: rgba(0,0,0,0.3); border: 1px solid var(--border2); border-radius: 6px; color: var(--text); font-size: 12px; font-family: 'Barlow', sans-serif; outline: none; transition: border-color .15s; }
   .app-input:focus, .app-select:focus { border-color: rgba(0,204,255,0.4); }
   .app-select { appearance: none; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='%234A7C94' d='M0 0l5 6 5-6z'/></svg>"); background-repeat: no-repeat; background-position: right 10px center; padding-right: 26px; }
+  .region-button-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .region-btn { min-height: 32px; border: 1px solid var(--border2); border-radius: 8px; background: rgba(0,0,0,.25); color: var(--muted); font-family: 'Barlow Condensed', sans-serif; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; cursor: pointer; }
+  .region-btn.active { color: #03111a; background: var(--cyan); border-color: var(--cyan); box-shadow: 0 0 0 1px rgba(0,204,255,.12), 0 0 18px rgba(0,204,255,.18); }
+  .region-btn:hover { border-color: rgba(0,204,255,.45); color: var(--white); }
+  .region-btn.active:hover { color: #03111a; }
 
   .app-btn { width: 100%; height: 34px; background: var(--cyan-dim); border: 1px solid rgba(0,204,255,0.3); color: var(--cyan); border-radius: 6px; font-family: 'Barlow Condensed', sans-serif; font-size: 12px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; cursor: pointer; margin-top: 8px; transition: all .15s; }
   .app-btn:hover { background: var(--cyan); color: #020617; }
@@ -294,20 +299,19 @@
 
     <div class="sidebar-body">
       <div class="section">
-        <div class="section-title">Region</div>
-        <label class="app-label" for="regionId">Region</label>
-        <select id="regionId" class="app-select">
-          <option value="54">US Region 1</option>
-          <option value="55">US Region 2</option>
-          <option value="56">US Region 3</option>
-          <option value="57">US Region 4</option>
-          <option value="58" selected>US Region 5</option>
-          <option value="59">US Region 6</option>
-          <option value="60">US Region 7</option>
-          <option value="61">US Region 8</option>
-          <option value="62">US Region 9</option>
-        </select>
-        <button class="app-btn" id="loadBtn">Load Drivers</button>
+        <div class="section-title">Regions</div>
+        <div class="region-button-grid" id="regionButtons" aria-label="Regions">
+          <button type="button" class="region-btn" data-region-id="54">Region 1</button>
+          <button type="button" class="region-btn" data-region-id="55">Region 2</button>
+          <button type="button" class="region-btn" data-region-id="56">Region 3</button>
+          <button type="button" class="region-btn" data-region-id="57">Region 4</button>
+          <button type="button" class="region-btn active" data-region-id="58">Region 5</button>
+          <button type="button" class="region-btn" data-region-id="59">Region 6</button>
+          <button type="button" class="region-btn" data-region-id="60">Region 7</button>
+          <button type="button" class="region-btn" data-region-id="61">Region 8</button>
+          <button type="button" class="region-btn" data-region-id="62">Region 9</button>
+        </div>
+        <button class="app-btn" id="loadBtn" style="margin-top: 8px;">Load Drivers</button>
         <button class="app-btn secondary" id="refreshBtn" style="margin-top: 6px;">Refresh</button>
         <div class="status-msg" id="statusMsg"></div>
       </div>
@@ -509,11 +513,34 @@ function bindAppEvents() {
   document.getElementById('logoutBtn').addEventListener('click', logout);
   document.getElementById('loadOrdersBtn').addEventListener('click', loadOrders);
   document.getElementById('clearOrdersBtn').addEventListener('click', clearOrders);
+  document.querySelectorAll('#regionButtons .region-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      btn.classList.toggle('active');
+      if (!getSelectedRegionIds().length) btn.classList.add('active');
+    });
+  });
   ['filterOnline','filterOnJob','filterOffline','filterCatering','filterScheduledConflicts','searchBox','zoneFilter'].forEach(id => {
     const el = document.getElementById(id);
     el.addEventListener('input', rebuildMarkers);
     el.addEventListener('change', rebuildMarkers);
   });
+}
+
+function getSelectedRegionIds() {
+  const ids = [...document.querySelectorAll('#regionButtons .region-btn.active')]
+    .map(btn => String(btn.dataset.regionId || '').trim())
+    .filter(Boolean);
+  return [...new Set(ids)];
+}
+function regionNameFromId(id) {
+  const n = Number(id);
+  return Number.isInteger(n) && n >= 54 && n <= 62 ? `US Region ${n - 53}` : String(id || 'All Regions');
+}
+function selectedRegionLabel() {
+  const ids = getSelectedRegionIds();
+  if (!ids.length) return 'all regions';
+  if (ids.length === 1) return regionNameFromId(ids[0]);
+  return ids.map(regionNameFromId).join(', ');
 }
 
 function setStatus(msg, kind) {
@@ -587,6 +614,34 @@ function parseSkipcartDateValueMs(v) {
 
 function dateMs(v) {
   return parseSkipcartDateValueMs(v);
+}
+function driverLastSeenMs(p) {
+  const candidates = [
+    p?.Last_Seen_Online, p?.LastSeenOnline, p?.LastSeen, p?.Last_Seen,
+    p?.lastSeenOnline, p?.lastSeen, p?.LastLocationDateTime, p?.LastLocationDate
+  ];
+  for (const v of candidates) {
+    if (!v) continue;
+    let ms = parseSkipcartDateValueMs(v);
+    if (!Number.isFinite(ms) && typeof v === 'string') {
+      const raw = v.trim();
+      if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2}(\.\d{1,7})?)?$/.test(raw)) {
+        ms = Date.parse(raw.replace(' ', 'T') + 'Z');
+      }
+    }
+    if (Number.isFinite(ms)) return ms;
+  }
+  return NaN;
+}
+function isOfflineOlderThan30Days(feature) {
+  const p = feature?.properties || {};
+  if (classify(p) !== 'offline') return false;
+  const ms = driverLastSeenMs(p);
+  if (!Number.isFinite(ms)) return false;
+  return ms < Date.now() - 30 * 24 * 60 * 60 * 1000;
+}
+function filterStaleOfflineDrivers(features) {
+  return (Array.isArray(features) ? features : []).filter(f => !isOfflineOlderThan30Days(f));
 }
 function orderStartMs(o) { return dateMs(o?.delWindowStart); }
 function orderEndMs(o) { return dateMs(o?.delWindowEnd) || orderStartMs(o); }
@@ -843,11 +898,30 @@ function rebuildZoneFilter() {
   if (cur && sorted.includes(cur)) sel.value = cur;
 }
 
-function ingest(payload) {
+function extractDriverFeatures(payload) {
   let fc = payload;
   if (payload && payload.result && payload.result.features) fc = payload.result;
-  if (!fc || !Array.isArray(fc.features)) throw new Error('No features in response');
-  allFeatures = fc.features;
+  if (!fc || !Array.isArray(fc.features)) return [];
+  return fc.features;
+}
+function mergeByKey(items, keyFn) {
+  const map = new Map();
+  for (const item of items || []) {
+    const key = keyFn(item);
+    if (!key) continue;
+    map.set(key, item);
+  }
+  return [...map.values()];
+}
+function ingest(payload) {
+  ingestMergedDriverPayloads([payload]);
+}
+function ingestMergedDriverPayloads(payloads) {
+  const merged = mergeByKey(
+    payloads.flatMap(extractDriverFeatures),
+    f => String(driverIdValue(f.properties) || f.properties?.DriverId || JSON.stringify(f.geometry?.coordinates || []))
+  );
+  allFeatures = filterStaleOfflineDrivers(merged);
   rebuildZoneFilter();
   rebuildMarkers();
   if (allMarkers.length) {
@@ -979,12 +1053,12 @@ function renderOrdersList() {
         </div>
         <div class="fee-editor">
           <div class="fee-editor-top">
-            <div class="fee-editor-title">Other Fee</div>
+            <div class="fee-editor-title">Desired Other Fee</div>
             <div class="fee-editor-current">Current ${escapeHtml(fmtMoney(currentOtherFee, o.driverTotalPayCurrency))}</div>
           </div>
           <div class="fee-editor-controls">
-            <input class="app-input fee-input" id="fee-${escapeHtml(o.orderId)}" data-order-id="${escapeHtml(o.orderId)}" type="number" min="0.01" max="30" step="0.01" placeholder="Add up to $30" />
-            <button class="mini-btn" data-action="add-fee" data-order-id="${escapeHtml(o.orderId)}" ${o.jobId ? '' : 'disabled'}>Add</button>
+            <input class="app-input fee-input" id="fee-${escapeHtml(o.orderId)}" data-order-id="${escapeHtml(o.orderId)}" type="number" min="0.01" step="0.01" placeholder="Set target fee" />
+            <button class="mini-btn" data-action="add-fee" data-order-id="${escapeHtml(o.orderId)}" ${o.jobId ? '' : 'disabled'}>Set</button>
           </div>
           <div class="fee-editor-status" id="fee-status-${escapeHtml(o.orderId)}"></div>
         </div>
@@ -1195,7 +1269,9 @@ async function updateOtherFee(orderId) {
   const order = allOrders.find(x => String(x.orderId) === String(orderId));
   const input = document.getElementById(`fee-${orderId}`);
   const status = document.getElementById(`fee-status-${orderId}`);
-  const amount = Number(input?.value);
+  const desiredOtherFee = Number(input?.value);
+  const currentOtherFee = Number(order?.driverPayBreakdown?.otherFee || 0);
+  const amountToAdd = Number.isFinite(desiredOtherFee) ? Math.round((desiredOtherFee - currentOtherFee + Number.EPSILON) * 100) / 100 : NaN;
 
   function setLocalStatus(msg, kind) {
     if (!status) return;
@@ -1207,17 +1283,21 @@ async function updateOtherFee(orderId) {
     setLocalStatus('Missing Job ID for this order.', 'error');
     return;
   }
-  if (!Number.isFinite(amount) || amount <= 0) {
-    setLocalStatus('Enter an amount greater than $0.00.', 'error');
+  if (!Number.isFinite(desiredOtherFee) || desiredOtherFee < 0) {
+    setLocalStatus('Enter the desired Other Fee total.', 'error');
     return;
   }
-  if (amount > 30) {
-    setLocalStatus('Max add is $30.00 per update.', 'error');
+  if (!Number.isFinite(amountToAdd) || amountToAdd <= 0) {
+    setLocalStatus(`Desired Other Fee must be higher than current ${fmtMoney(currentOtherFee, order.driverTotalPayCurrency)}.`, 'error');
+    return;
+  }
+  if (amountToAdd > 30) {
+    setLocalStatus(`Max increase is $30.00. This would add ${fmtMoney(amountToAdd, '$')}.`, 'error');
     return;
   }
 
-  setLocalStatus(`Adding ${fmtMoney(amount, '$')}…`, '');
-  setOrdersStatus(`Adding ${fmtMoney(amount, '$')} Other Fee to Order ${order.orderId}…`, 'info');
+  setLocalStatus(`Setting target to ${fmtMoney(desiredOtherFee, '$')}…`, '');
+  setOrdersStatus(`Setting Other Fee target to ${fmtMoney(desiredOtherFee, '$')} for Order ${order.orderId}…`, 'info');
 
   try {
     const r = await fetch('/api/update-order-fee', {
@@ -1227,7 +1307,7 @@ async function updateOtherFee(orderId) {
         'X-Usertoken': Session.userToken,
         'Accept': 'application/json'
       },
-      body: JSON.stringify({ jobId: order.jobId, amountToAdd: amount })
+      body: JSON.stringify({ jobId: order.jobId, desiredOtherFee })
     });
     const json = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(json.error || 'Other Fee update failed');
@@ -1245,7 +1325,7 @@ async function updateOtherFee(orderId) {
       cancellationFee: payment.cancellationFee ?? order.driverPayBreakdown?.cancellationFee ?? null
     };
 
-    const msg = json.message || `Added ${fmtMoney(amount, '$')} to Other Fee.`;
+    const msg = json.message || `Set Other Fee to ${fmtMoney(desiredOtherFee, '$')}.`;
     setLocalStatus(`${msg} New Driver Pay: ${fmtMoney(order.driverTotalPay, order.driverTotalPayCurrency)}`, 'success');
     setOrdersStatus(`${msg} DeliveryPaymentDetails refreshed for Order ${order.orderId}.`, 'success');
     input.value = '';
@@ -1268,26 +1348,31 @@ async function loadOrders() {
   }
 
   const hours = document.getElementById('ordersWindow').value || '12';
-  const regionId = document.getElementById('regionId').value.trim();
-  setOrdersStatus('Loading New + Scheduled ezCater orders…', 'info');
+  const regionIds = getSelectedRegionIds();
+  setOrdersStatus(`Loading New + Scheduled ezCater orders for ${selectedRegionLabel()}…`, 'info');
   document.getElementById('loadOrdersBtn').disabled = true;
 
   try {
-    const url = `/api/orders?hours=${encodeURIComponent(hours)}${regionId ? '&regionId=' + encodeURIComponent(regionId) : ''}`;
-    const r = await fetch(url, { headers: { 'X-Usertoken': Session.userToken, 'Accept': 'application/json' } });
-    const json = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(json.error || 'Orders request failed (' + r.status + ')');
+    const targets = regionIds.length ? regionIds : [''];
+    const results = await Promise.all(targets.map(async regionId => {
+      const url = `/api/orders?hours=${encodeURIComponent(hours)}${regionId ? '&regionId=' + encodeURIComponent(regionId) : ''}`;
+      const r = await fetch(url, { headers: { 'X-Usertoken': Session.userToken, 'Accept': 'application/json' } });
+      const json = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(`${regionId ? regionNameFromId(regionId) + ': ' : ''}${json.error || 'Orders request failed (' + r.status + ')'}`);
+      return json;
+    }));
     selectedAssignOrderId = null;
     updateAssignBanner();
-    allOrders = Array.isArray(json.orders) ? json.orders : [];
-    scheduledOrders = Array.isArray(json.scheduledOrders) ? json.scheduledOrders : [];
+    allOrders = mergeByKey(results.flatMap(j => Array.isArray(j.orders) ? j.orders : []), o => String(o.orderId || o.jobId || JSON.stringify(o)));
+    scheduledOrders = mergeByKey(results.flatMap(j => Array.isArray(j.scheduledOrders) ? j.scheduledOrders : []), o => String(o.orderId || o.jobId || JSON.stringify(o)));
     mapOrders();
     renderOrdersList();
     rebuildMarkers();
-    const capLabel = json.windowEnd ? ` · no later than ${fmtDateTime(json.windowEnd)}` : '';
+    const windowEnds = results.map(j => j.windowEnd).filter(Boolean).sort();
+    const capLabel = windowEnds.length ? ` · no later than ${fmtDateTime(windowEnds[0])}` : '';
     const scheduledLabel = scheduledOrders.length ? ` · ${scheduledOrders.length.toLocaleString()} scheduled drivers/orders checked` : ' · no scheduled conflicts found';
-    document.getElementById('ordersSub').textContent = `${allOrders.length.toLocaleString()} New ezCater orders · next ${hours}h${capLabel}`;
-    setOrdersStatus(`Loaded ${allOrders.length.toLocaleString()} New orders and ${scheduledOrders.length.toLocaleString()} Scheduled orders${capLabel}${scheduledLabel}`, 'success');
+    document.getElementById('ordersSub').textContent = `${allOrders.length.toLocaleString()} New ezCater orders · next ${hours}h · ${selectedRegionLabel()}${capLabel}`;
+    setOrdersStatus(`Loaded ${allOrders.length.toLocaleString()} New orders and ${scheduledOrders.length.toLocaleString()} Scheduled orders for ${selectedRegionLabel()}${capLabel}${scheduledLabel}`, 'success');
   } catch (err) {
     console.error(err);
     setOrdersStatus('Error: ' + err.message, 'error');
@@ -1303,33 +1388,36 @@ async function loadDrivers() {
     return;
   }
 
-  setStatus('Loading…', 'info');
+  const regionIds = getSelectedRegionIds();
+  setStatus(`Loading drivers for ${selectedRegionLabel()}…`, 'info');
   document.getElementById('loadBtn').disabled = true;
   document.getElementById('refreshBtn').disabled = true;
 
   try {
-    const regionId = document.getElementById('regionId').value.trim();
-    const url = '/api/drivers' + (regionId ? '?regionId=' + encodeURIComponent(regionId) : '');
-    const r = await fetch(url, {
-      headers: { 'X-Usertoken': Session.userToken, 'Accept': 'application/json' }
-    });
+    const targets = regionIds.length ? regionIds : [''];
+    const payloads = await Promise.all(targets.map(async regionId => {
+      const url = '/api/drivers' + (regionId ? '?regionId=' + encodeURIComponent(regionId) : '');
+      const r = await fetch(url, {
+        headers: { 'X-Usertoken': Session.userToken, 'Accept': 'application/json' }
+      });
 
-    if (r.status === 401 || r.status === 403) {
-      let detail = '';
-      try {
-        const errJson = await r.json();
-        console.error('[drivers] 401 debug:', errJson);
-        if (errJson.reason) detail = ' (' + errJson.reason + ')';
-        if (errJson.upstream?.Message) detail = ' — ' + errJson.upstream.Message;
-      } catch {}
-      throw new Error('Unauthorized — please log in again' + detail);
-    }
-    if (!r.ok) throw new Error('Request failed (' + r.status + ')');
+      if (r.status === 401 || r.status === 403) {
+        let detail = '';
+        try {
+          const errJson = await r.json();
+          console.error('[drivers] 401 debug:', errJson);
+          if (errJson.reason) detail = ' (' + errJson.reason + ')';
+          if (errJson.upstream?.Message) detail = ' — ' + errJson.upstream.Message;
+        } catch {}
+        throw new Error('Unauthorized — please log in again' + detail);
+      }
+      if (!r.ok) throw new Error(`${regionId ? regionNameFromId(regionId) + ': ' : ''}Request failed (${r.status})`);
+      return r.json();
+    }));
 
-    const json = await r.json();
-    ingest(json);
+    ingestMergedDriverPayloads(payloads);
     if (allOrders.length) renderOrdersList();
-    setStatus(`Loaded ${allFeatures.length.toLocaleString()} drivers`, 'success');
+    setStatus(`Loaded ${allFeatures.length.toLocaleString()} drivers for ${selectedRegionLabel()} · stale offline drivers hidden`, 'success');
   } catch (e) {
     console.error(e);
     setStatus('Error: ' + e.message, 'error');
