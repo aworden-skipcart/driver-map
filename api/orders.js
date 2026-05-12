@@ -3,14 +3,10 @@
 // GET /api/orders?hours=12&regionId=58
 // Required header: X-Usertoken: <JWT from /api/auth>
 //
-// Pulls New ezCater orders for a true rolling next 12/24 hours window, then
-// enriches each order with pickup/dropoff coordinates from /v2api/steps/{JobId}
-// so the browser can map pickup pins and draw pickup-to-delivery route lines.
-//
-// Important: Skipcart can return date-bucket spillover depending on how the
-// dispatch search interprets deliverywindowrange. We therefore apply a second
-// server-side hard cap after search so the 24-hour view never includes orders
-// later than exactly now + 24 hours.
+// Pulls ezCater New orders for assignment plus Scheduled ezCater orders for
+// driver-conflict detection. New orders are mapped in the Orders panel. Scheduled
+// orders are returned separately so the browser can show which Catering drivers
+// are already committed and hide them during assign mode.
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -46,104 +42,61 @@ export default async function handler(req, res) {
 
   const now = new Date();
   const end = new Date(now.getTime() + hours * 60 * 60 * 1000);
+  // Pull a small buffer beyond the visible order window so conflict detection can
+  // catch scheduled drivers up to 1 hour after the selected order's window end.
+  const scheduledEnd = new Date(end.getTime() + 2 * 60 * 60 * 1000);
   const windowStartMs = now.getTime();
   const windowEndMs = end.getTime();
+  const scheduledEndMs = scheduledEnd.getTime();
   const pageSize = 75;
-  const maxPages = 8; // hard cap safety; 600 orders max before enrichment
+  const maxPages = 8; // hard cap safety; 600 rows per status before enrichment
 
   try {
-    const baseFilters = {
-      customers: [],
-      orderstatus: [{ name: 'New' }],
-      orders: [],
-      partners: [{ partnerId: 'EZCater' }],
-      drivers: [],
-      lastEvents: [],
-      deliverywindowrange: {
-        delwindowStartAt: now.toISOString(),
-        delwindowEndAt: end.toISOString()
-      },
-      jobs: [],
-      areas: [],
-      stores: [],
-      brandname: [],
-      externalorderids: [],
-      regions: [],
-      partnercountry: [],
-      activeproblemdeliveries: [],
-      aggorderids: [],
-      carriers: [],
-      controlledContents: '',
-      zoneIds: [],
-      zipcode: [],
-      latePickupInMinute: '',
-      excludePartners: [{ partnerId: 'Daas' }]
-    };
-
-    // The HAR did not include a region-filtered example. To avoid guessing a
-    // brittle payload shape, we pull the ezCater New-order set and filter by
-    // RegionName after the response when a region is selected.
     const requestedRegionName = REGION_NAMES[String(regionId)] || '';
 
-    const allOrders = [];
-    let totalCount = null;
-    for (let pageindex = 1; pageindex <= maxPages; pageindex++) {
-      const body = {
-        filters: baseFilters,
-        pageindex,
-        pagesize: String(pageSize),
-        sortColumn: 'DelWindowStart',
-        sortDirection: 'asc'
-      };
+    const newRaw = await fetchOrdersByStatus({ statusName: 'New', start: now, end, pageSize, maxPages, appToken: APPTOKEN, userToken });
+    let scheduledRaw = await fetchOrdersByStatus({ statusName: 'Scheduled', start: now, end: scheduledEnd, pageSize, maxPages, appToken: APPTOKEN, userToken });
 
-      const searchJson = await upstreamJson('https://live.skipcart.com/dash-api/v2api/Orders/search', {
-        method: 'POST',
-        headers: makeHeaders(APPTOKEN, userToken, true),
-        body: JSON.stringify(body)
-      });
-
-      const result = searchJson?.Result || searchJson?.result || {};
-      const rows = result.OrderData || result.orderData || [];
-      totalCount = result.TotalCount ?? result.totalCount ?? totalCount;
-      allOrders.push(...rows);
-
-      if (!rows.length || rows.length < pageSize) break;
-      if (totalCount !== null && allOrders.length >= totalCount) break;
+    // Some Skipcart views expose scheduled rows even when orderstatus is blank
+    // but do not always honor a Scheduled status filter consistently. Fallback
+    // to an unfiltered status search and keep only scheduled rows by response data.
+    if (!scheduledRaw.length) {
+      const unfiltered = await fetchOrdersByStatus({ statusName: null, start: now, end: scheduledEnd, pageSize, maxPages, appToken: APPTOKEN, userToken });
+      scheduledRaw = unfiltered.filter(o => /scheduled/i.test(String(o.OrderStatus || o.orderStatus || '')));
     }
 
-    const regionFiltered = requestedRegionName
-      ? allOrders.filter(o => String(o.RegionName || '').toLowerCase() === requestedRegionName.toLowerCase())
-      : allOrders;
+    const newRegionFiltered = requestedRegionName
+      ? newRaw.filter(o => String(o.RegionName || '').toLowerCase() === requestedRegionName.toLowerCase())
+      : newRaw;
+    const scheduledRegionFiltered = requestedRegionName
+      ? scheduledRaw.filter(o => String(o.RegionName || '').toLowerCase() === requestedRegionName.toLowerCase())
+      : scheduledRaw;
 
     // Hard rolling-window filter. This prevents the Orders/search endpoint from
     // returning tomorrow/end-of-day records outside the selected 12/24h window.
-    const windowFiltered = regionFiltered.filter(order => isOrderInsideWindow(order, windowStartMs, windowEndMs));
+    const newWindowFiltered = newRegionFiltered.filter(order => isOrderStartInsideWindow(order, windowStartMs, windowEndMs));
+    const scheduledWindowFiltered = scheduledRegionFiltered.filter(order => orderOverlapsWindow(order, windowStartMs, scheduledEndMs));
 
-    const enriched = await mapLimit(windowFiltered, 6, async (order) => {
-      const jobId = order.JobId || order.jobId;
-      if (!jobId) return normalizeOrder(order, null);
-      try {
-        const stepsJson = await upstreamJson(`https://live.skipcart.com/dash-api/v2api/steps/${encodeURIComponent(jobId)}`, {
-          method: 'GET',
-          headers: makeHeaders(APPTOKEN, userToken, false)
-        });
-        return normalizeOrder(order, stepsJson?.Result || stepsJson?.result || null);
-      } catch (err) {
-        console.error('[orders] steps enrichment failed', jobId, err.message);
-        return normalizeOrder(order, null, err.message);
-      }
-    });
+    const [newEnriched, scheduledEnriched] = await Promise.all([
+      enrichOrders(newWindowFiltered, APPTOKEN, userToken),
+      enrichOrders(scheduledWindowFiltered, APPTOKEN, userToken)
+    ]);
 
     res.setHeader('Cache-Control', 'no-store');
     return res.status(200).json({
       status: true,
       hours,
-      totalFound: allOrders.length,
-      totalAfterRegionFilter: regionFiltered.length,
-      totalInsideWindow: windowFiltered.length,
+      totalFound: newRaw.length,
+      scheduledTotalFound: scheduledRaw.length,
+      totalAfterRegionFilter: newRegionFiltered.length,
+      scheduledAfterRegionFilter: scheduledRegionFiltered.length,
+      totalInsideWindow: newWindowFiltered.length,
+      scheduledInsideWindow: scheduledWindowFiltered.length,
       windowStart: now.toISOString(),
       windowEnd: end.toISOString(),
-      orders: enriched
+      scheduledWindowEnd: scheduledEnd.toISOString(),
+      orders: newEnriched,
+      scheduledOrders: scheduledEnriched
     });
   } catch (err) {
     console.error('[orders] proxy error:', err);
@@ -151,11 +104,102 @@ export default async function handler(req, res) {
   }
 }
 
+async function fetchOrdersByStatus({ statusName, start, end, pageSize, maxPages, appToken, userToken }) {
+  const baseFilters = {
+    customers: [],
+    orderstatus: statusName ? [{ name: statusName }] : [],
+    orders: [],
+    partners: [{ partnerId: 'EZCater' }],
+    drivers: [],
+    lastEvents: [],
+    deliverywindowrange: {
+      delwindowStartAt: start.toISOString(),
+      delwindowEndAt: end.toISOString()
+    },
+    jobs: [],
+    areas: [],
+    stores: [],
+    brandname: [],
+    externalorderids: [],
+    regions: [],
+    partnercountry: [],
+    activeproblemdeliveries: [],
+    aggorderids: [],
+    carriers: [],
+    controlledContents: '',
+    zoneIds: [],
+    zipcode: [],
+    latePickupInMinute: '',
+    excludePartners: [{ partnerId: 'Daas' }]
+  };
 
-function isOrderInsideWindow(order, startMs, endMs) {
+  const allOrders = [];
+  const seen = new Set();
+  let totalCount = null;
+
+  for (let pageindex = 1; pageindex <= maxPages; pageindex++) {
+    const body = {
+      filters: baseFilters,
+      pageindex,
+      pagesize: String(pageSize),
+      sortColumn: 'DelWindowStart',
+      sortDirection: 'asc'
+    };
+
+    const searchJson = await upstreamJson('https://live.skipcart.com/dash-api/v2api/Orders/search', {
+      method: 'POST',
+      headers: makeHeaders(appToken, userToken, true),
+      body: JSON.stringify(body)
+    });
+
+    const result = searchJson?.Result || searchJson?.result || {};
+    const rows = result.OrderData || result.orderData || [];
+    totalCount = result.TotalCount ?? result.totalCount ?? totalCount;
+
+    for (const row of rows) {
+      const key = String(row.OrderId || row.orderId || row.JobId || row.jobId || JSON.stringify(row).slice(0, 80));
+      if (seen.has(key)) continue;
+      seen.add(key);
+      allOrders.push(row);
+    }
+
+    if (!rows.length || rows.length < pageSize) break;
+    if (totalCount !== null && allOrders.length >= totalCount) break;
+  }
+
+  return allOrders;
+}
+
+async function enrichOrders(orders, appToken, userToken) {
+  return mapLimit(orders, 6, async (order) => {
+    const jobId = order.JobId || order.jobId;
+    if (!jobId) return normalizeOrder(order, null);
+    try {
+      const stepsJson = await upstreamJson(`https://live.skipcart.com/dash-api/v2api/steps/${encodeURIComponent(jobId)}`, {
+        method: 'GET',
+        headers: makeHeaders(appToken, userToken, false)
+      });
+      return normalizeOrder(order, stepsJson?.Result || stepsJson?.result || null);
+    } catch (err) {
+      console.error('[orders] steps enrichment failed', jobId, err.message);
+      return normalizeOrder(order, null, err.message);
+    }
+  });
+}
+
+function isOrderStartInsideWindow(order, startMs, endMs) {
   const orderMs = getOrderWindowStartMs(order);
   if (!Number.isFinite(orderMs)) return false;
   return orderMs >= startMs && orderMs <= endMs;
+}
+
+function orderOverlapsWindow(order, startMs, endMs) {
+  const orderStartMs = getOrderWindowStartMs(order);
+  const orderEndMs = getOrderWindowEndMs(order);
+  if (!Number.isFinite(orderStartMs) && !Number.isFinite(orderEndMs)) return false;
+  const start = Number.isFinite(orderStartMs) ? orderStartMs : orderEndMs;
+  const end = Number.isFinite(orderEndMs) ? orderEndMs : orderStartMs;
+  return start <= endMs && end >= startMs;
 }
 
 function getOrderWindowStartMs(order) {
@@ -177,6 +221,25 @@ function getOrderWindowStartMs(order) {
   return NaN;
 }
 
+function getOrderWindowEndMs(order) {
+  const candidates = [
+    order?.DelWindowEndString,
+    order?.DelWindowEnd,
+    order?.delWindowEndString,
+    order?.delWindowEnd,
+    order?.PickupWindowEnd,
+    order?.PickupWindowEndString,
+    order?.DeliveryWindowEnd,
+    order?.DeliveryWindowEndString
+  ];
+
+  for (const value of candidates) {
+    const ms = parseSkipcartDateMs(value);
+    if (Number.isFinite(ms)) return ms;
+  }
+  return NaN;
+}
+
 function parseSkipcartDateMs(value) {
   if (!value) return NaN;
   if (value instanceof Date) return value.getTime();
@@ -185,9 +248,6 @@ function parseSkipcartDateMs(value) {
   const raw = String(value).trim();
   if (!raw) return NaN;
 
-  // Skipcart commonly sends both "2026-05-12T18:36:00" and
-  // "2026-05-12T18:36:00Z". Prefer the explicit value, then try appending Z
-  // so date-only/no-zone values are still compared consistently on Vercel.
   const direct = Date.parse(raw);
   if (Number.isFinite(direct)) return direct;
 
@@ -233,6 +293,15 @@ function normalizeOrder(order, stepsResult, stepsError) {
   const dropoff = stops.find(s => (s.tasks || []).some(t => ['drop','dropoff','delivery'].includes(String(t.task_type || '').toLowerCase()))) || null;
   const pickupTask = pickup?.tasks?.find(t => String(t.task_type || '').toLowerCase() === 'pickup') || null;
   const dropoffTask = dropoff?.tasks?.[0] || null;
+  const carrierDetails = Array.isArray(order.CarriersOrdersDetails) ? order.CarriersOrdersDetails : [];
+  const firstCarrier = carrierDetails[0] || null;
+  const firstCarrierDriver = Array.isArray(firstCarrier?.Drivers) ? firstCarrier.Drivers[0] : null;
+  const assignedDriverId = order.DriverId || order.driverId || firstCarrier?.DriverId || firstCarrier?.driverId || null;
+  const assignedDriverName = firstCarrier?.CarrierDriverName
+    || [firstCarrierDriver?.FirstName, firstCarrierDriver?.LastName].filter(Boolean).join(' ')
+    || order.DriverName
+    || order.driverName
+    || '';
 
   return {
     orderId: order.OrderId || order.orderId || pickupTask?.order_id || dropoffTask?.order_id || null,
@@ -244,9 +313,13 @@ function normalizeOrder(order, stepsResult, stepsError) {
     regionName: order.RegionName || '',
     zoneName: order.ZoneName || '',
     areaName: Array.isArray(order.AreaData) && order.AreaData[0] ? order.AreaData[0].areaname : '',
-    delWindowStart: order.DelWindowStart || order.DelWindowStartString || '',
-    delWindowEnd: order.DelWindowEnd || order.DelWindowEndString || '',
-    driverId: order.DriverId || null,
+    delWindowStart: order.DelWindowStartString || order.DelWindowStart || '',
+    delWindowEnd: order.DelWindowEndString || order.DelWindowEnd || '',
+    driverId: assignedDriverId,
+    driverName: assignedDriverName,
+    carrierDriverName: firstCarrier?.CarrierDriverName || '',
+    carrierDeliveryId: firstCarrier?.CarrierDeliveryId || '',
+    lastEvent: order.LastEvent || '',
     pickup: pickup ? {
       address: pickup.address || '',
       lat: Number(pickup.latitude),
