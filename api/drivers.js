@@ -2,18 +2,6 @@
 //
 // GET /api/drivers?regionId=58
 // Required header: X-Apptoken: <the apptoken handed back by /api/auth>
-//
-// We don't trust the browser-supplied token blindly — we check it matches
-// the server-side SKIPCART_APPTOKEN. The /api/auth endpoint is the only
-// thing that hands that token out, and only after Skipcart validates the
-// user's credentials. So a valid X-Apptoken header means the bearer
-// authenticated as a Skipcart user at some point in this session.
-
-export const config = {
-  // Edge runtime is fine here — we're just proxying. Faster cold starts,
-  // lower latency, and Vercel caches the response naturally.
-  runtime: 'nodejs'
-};
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -21,19 +9,43 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const APPTOKEN = process.env.SKIPCART_APPTOKEN;
+  const APPTOKEN = (process.env.SKIPCART_APPTOKEN || '').trim();
   if (!APPTOKEN) {
-    console.error('SKIPCART_APPTOKEN is not set');
-    return res.status(500).json({ error: 'Server misconfigured' });
+    console.error('[drivers] SKIPCART_APPTOKEN is not set');
+    return res.status(500).json({ error: 'Server misconfigured', reason: 'apptoken_missing' });
   }
 
-  // Token check — constant-time-ish comparison
-  const supplied = req.headers['x-apptoken'] || req.headers['X-Apptoken'];
-  if (!supplied || !safeEqual(String(supplied), APPTOKEN)) {
-    return res.status(401).json({ error: 'Unauthorized' });
+  // Node lowercases incoming header names, but be defensive.
+  const raw =
+       req.headers['x-apptoken']
+    || req.headers['X-Apptoken']
+    || '';
+  const supplied = String(raw).trim();
+
+  // Diagnostic logging — visible in Vercel function logs
+  console.log('[drivers] received request', {
+    hasHeader: !!supplied,
+    suppliedLen: supplied.length,
+    expectedLen: APPTOKEN.length,
+    suppliedPrefix: supplied.slice(0, 8),
+    expectedPrefix: APPTOKEN.slice(0, 8),
+    match: supplied === APPTOKEN,
+    headerKeys: Object.keys(req.headers).filter(k =>
+      k.toLowerCase().includes('apptoken') || k.toLowerCase().includes('auth'))
+  });
+
+  if (!supplied || !safeEqual(supplied, APPTOKEN)) {
+    return res.status(401).json({
+      error: 'Unauthorized',
+      debug: {
+        suppliedLen: supplied.length,
+        expectedLen: APPTOKEN.length,
+        hasHeader: !!supplied,
+        match: supplied === APPTOKEN
+      }
+    });
   }
 
-  // Parse + validate regionId
   const regionId = req.query?.regionId;
   let target = 'https://live.skipcart.com/dash-api/v2api/Driver/GetDriverLocationGeoJson';
   if (regionId !== undefined && regionId !== '') {
@@ -57,16 +69,15 @@ export default async function handler(req, res) {
     const text = await r.text();
 
     if (!r.ok) {
+      console.error('[drivers] upstream error', r.status, text.slice(0, 200));
       return res.status(r.status).json({ error: 'Upstream error', status: r.status });
     }
 
-    // 30-second edge cache — driver locations are real-time-ish but
-    // the dashboard polls maybe every 30-60s anyway.
     res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=60');
     res.setHeader('Content-Type', 'application/json');
     return res.status(200).send(text);
   } catch (err) {
-    console.error('Driver proxy error:', err);
+    console.error('[drivers] proxy error:', err);
     return res.status(502).json({ error: 'Could not reach driver API' });
   }
 }
