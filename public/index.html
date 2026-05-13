@@ -153,9 +153,10 @@
   .orders-list::-webkit-scrollbar-track, #sidebar::-webkit-scrollbar-track { background: rgba(3,8,23,.55); border-radius: 999px; }
   .orders-list::-webkit-scrollbar-thumb, #sidebar::-webkit-scrollbar-thumb { background: linear-gradient(180deg, rgba(0,204,255,.58), rgba(30,64,175,.48)); border: 2px solid rgba(3,8,23,.70); border-radius: 999px; }
   .orders-list::-webkit-scrollbar-thumb:hover, #sidebar::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, rgba(0,204,255,.85), rgba(30,64,175,.65)); }
-  .order-card { position: relative; background: linear-gradient(180deg, rgba(12,21,48,.98), rgba(8,15,36,.98)); border: 1px solid rgba(26,48,80,.95); border-radius: 14px; padding: 12px; margin-bottom: 12px; cursor: pointer; transition: transform .15s, border-color .15s, box-shadow .15s; box-shadow: 0 10px 26px rgba(0,0,0,.22); overflow: hidden; }
+  .order-card { position: relative; background: linear-gradient(180deg, rgba(12,21,48,.98), rgba(8,15,36,.98)); border: 1px solid rgba(26,48,80,.95); border-radius: 14px; padding: 12px; margin-bottom: 12px; cursor: pointer; transition: border-color .15s, box-shadow .15s, background .15s; box-shadow: 0 10px 26px rgba(0,0,0,.22); overflow: hidden; }
   .order-card::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 3px; background: linear-gradient(180deg, var(--cyan), rgba(0,204,255,.2)); opacity: .75; }
-  .order-card:hover, .order-card.active { transform: translateY(-1px); border-color: rgba(0,204,255,0.48); box-shadow: 0 12px 30px rgba(0,0,0,.28), 0 0 0 1px rgba(0,204,255,0.12) inset; }
+  .order-card:hover, .order-card.active { border-color: rgba(0,204,255,0.48); box-shadow: 0 12px 30px rgba(0,0,0,.28), 0 0 0 1px rgba(0,204,255,0.12) inset; }
+  .order-card:hover { background: linear-gradient(180deg, rgba(14,26,58,.98), rgba(9,17,40,.98)); }
   .order-card.active::before { opacity: 1; }
   .order-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
   .order-brand { color: var(--white); font-weight: 800; font-size: 14px; line-height: 1.15; padding-left: 2px; }
@@ -1561,7 +1562,11 @@ async function preloadCurrentDriverOrder(p) {
       return entry;
     } finally {
       currentOrderDetailsFetches.delete(cacheKey);
-      rebuildMarkers();
+      // Do not rebuild map markers from inside a current-order lookup.
+      // Rebuilding the marker cluster while a user is hovering/clicking a marker
+      // removes the live marker from the map, which makes Leaflet close the
+      // popup/tooltip immediately and can make the orders panel feel jittery.
+      // The popup itself is refreshed by loadCurrentDriverOrderForPopup().
       if (allOrders.length) renderOrdersList();
     }
   })();
