@@ -31,8 +31,8 @@ export default async function handler(req, res) {
     const end = new Date(now.getTime() + 24 * 60 * 60 * 1000);
     const raw = await searchOrder({ orderId, jobId, start, end, appToken: APPTOKEN, userToken });
     if (!raw) {
-      res.setHeader('Cache-Control', 'no-store');
-      return res.status(200).json({ status: false, stale: true, reason: 'stale_current_order', error: 'Order not found' });
+      res.setHeader('Cache-Control', 'private, max-age=60');
+      return res.status(200).json({ status: false, stale: true, reason: 'stale_current_order', error: 'Order not found in active lookup window' });
     }
 
     const effectiveJobId = raw.JobId || raw.jobId || jobId;
@@ -46,7 +46,7 @@ export default async function handler(req, res) {
     const order = normalizeOrder(raw, stepsResult.result, jobDetailsResult.result, paymentResult.result, errors);
     const relevance = getCurrentOrderRelevance(order, now);
     if (!relevance.active) {
-      res.setHeader('Cache-Control', 'no-store');
+      res.setHeader('Cache-Control', 'private, max-age=60');
       return res.status(200).json({
         status: false,
         stale: true,
@@ -58,10 +58,6 @@ export default async function handler(req, res) {
     res.setHeader('Cache-Control', 'no-store');
     return res.status(200).json({ status: true, order });
   } catch (err) {
-    if (err.status === 404) {
-      res.setHeader('Cache-Control', 'no-store');
-      return res.status(200).json({ status: false, stale: true, reason: 'stale_current_order', error: 'Order not found' });
-    }
     console.error('[order-details] proxy error:', err);
     return res.status(err.status || 502).json({ error: err.message || 'Could not load order details', upstream: err.upstream || null });
   }
