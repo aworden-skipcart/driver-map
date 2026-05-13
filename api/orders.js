@@ -403,6 +403,7 @@ function normalizeOrder(order, stepsResult, jobDetailsResult, paymentResult, enr
       lng: pickupLng,
       entityName: pickupTask?.entity?.name || pickupTask?.entity?.brand_name || order.BrandName || '',
       phone: pickupTask?.entity?.phone || '',
+      scheduledAt: normalizeSkipcartDateString(pickupTask?.scheduled_at),
       status: pickup.status || pickupTask?.Status || ''
     } : null,
     dropoff: dropoff ? {
@@ -411,6 +412,7 @@ function normalizeOrder(order, stepsResult, jobDetailsResult, paymentResult, enr
       lng: dropoffLng,
       customerName: dropoffTask?.entity?.customer_name || '',
       phone: dropoffTask?.entity?.customer_phonenumber || '',
+      scheduledAt: normalizeSkipcartDateString(dropoffTask?.scheduled_at),
       status: dropoff.status || dropoffTask?.Status || ''
     } : null,
     stops,
