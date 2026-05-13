@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#020617"/>
+  <rect x="30" y="30" width="452" height="452" rx="84" fill="#080f24" stroke="#00ccff" stroke-width="14"/>
+  <circle cx="256" cy="256" r="154" fill="none" stroke="#00ccff" stroke-width="10" opacity=".35"/>
+  <text x="256" y="306" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="190" font-weight="800" fill="#ffffff">SC</text>
+  <text x="256" y="386" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="44" font-weight="800" letter-spacing="6" fill="#00ccff">DRIVER MAP</text>
+</svg>
