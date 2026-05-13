@@ -64,9 +64,13 @@ export default async function handler(req, res) {
     // Skipcart often returns HTTP 200 with status/status_code carrying the true outcome.
     const ok = json?.status === true || json?.Status === true || json?.result === true || json?.Result === true;
     if (!ok) {
+      const errorMessage = json?.message || json?.Message || 'Assignment rejected by Skipcart';
+      const reason = /Delivery\s+Not\s+Found\s+Or\s+Delivery\s+Is\s+Not\s+New/i.test(String(errorMessage))
+        ? 'delivery_not_found_or_not_new'
+        : 'upstream_business_rule';
       return res.status(400).json({
-        error: json?.message || json?.Message || 'Assignment rejected by Skipcart',
-        reason: 'upstream_business_rule',
+        error: errorMessage,
+        reason,
         attempted: { jobId, driverId, orderId },
         upstream: json
       });
