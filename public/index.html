@@ -147,7 +147,12 @@
   .orders-title { font-family: 'Barlow Condensed', sans-serif; font-size: 13px; font-weight: 800; letter-spacing: 0.2em; text-transform: uppercase; color: var(--cyan); }
   .orders-sub { font-size: 10px; color: var(--muted); font-family: 'DM Mono', monospace; margin-top: 2px; }
   .orders-controls { padding: 12px 16px; border-bottom: 1px solid var(--border); }
-  .orders-list { flex: 1; overflow-y: auto; padding: 12px; }
+  .orders-list { flex: 1; overflow-y: auto; padding: 12px; scrollbar-width: thin; scrollbar-color: rgba(0,204,255,.42) rgba(3,8,23,.55); }
+  #sidebar { scrollbar-width: thin; scrollbar-color: rgba(0,204,255,.35) rgba(3,8,23,.55); }
+  .orders-list::-webkit-scrollbar, #sidebar::-webkit-scrollbar { width: 10px; }
+  .orders-list::-webkit-scrollbar-track, #sidebar::-webkit-scrollbar-track { background: rgba(3,8,23,.55); border-radius: 999px; }
+  .orders-list::-webkit-scrollbar-thumb, #sidebar::-webkit-scrollbar-thumb { background: linear-gradient(180deg, rgba(0,204,255,.58), rgba(30,64,175,.48)); border: 2px solid rgba(3,8,23,.70); border-radius: 999px; }
+  .orders-list::-webkit-scrollbar-thumb:hover, #sidebar::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, rgba(0,204,255,.85), rgba(30,64,175,.65)); }
   .order-card { position: relative; background: linear-gradient(180deg, rgba(12,21,48,.98), rgba(8,15,36,.98)); border: 1px solid rgba(26,48,80,.95); border-radius: 14px; padding: 12px; margin-bottom: 12px; cursor: pointer; transition: transform .15s, border-color .15s, box-shadow .15s; box-shadow: 0 10px 26px rgba(0,0,0,.22); overflow: hidden; }
   .order-card::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 3px; background: linear-gradient(180deg, var(--cyan), rgba(0,204,255,.2)); opacity: .75; }
   .order-card:hover, .order-card.active { transform: translateY(-1px); border-color: rgba(0,204,255,0.48); box-shadow: 0 12px 30px rgba(0,0,0,.28), 0 0 0 1px rgba(0,204,255,0.12) inset; }
@@ -192,6 +197,7 @@
   .driver-car-marker.online { background: #22c55e; }
   .driver-car-marker.on-job { background: #f59e0b; }
   .driver-car-marker.offline { background: #6b7280; color: #e5e7eb; }
+  .driver-car-marker.tried { background: #f9a8d4; color: #3b0a24; box-shadow: 0 0 0 5px rgba(249,168,212,.26), 0 0 22px rgba(249,168,212,.28), 0 8px 18px rgba(0,0,0,.35); }
   .driver-car-marker.assignable { box-shadow: 0 0 0 5px rgba(0,204,255,.28), 0 0 22px rgba(0,204,255,.28), 0 8px 18px rgba(0,0,0,.35); }
   .order-pin { background: var(--cyan); color: #020617; border: 2px solid #fff; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 12px; box-shadow: 0 0 0 4px rgba(0,204,255,.18); }
   .drop-pin { background: var(--danger); color: #020617; border: 2px solid #fff; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 10px; }
@@ -216,6 +222,14 @@
   .scheduled-meta span { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; border-radius: 999px; padding: 2px 7px; color: var(--muted); background: rgba(148,163,184,.08); border: 1px solid rgba(148,163,184,.12); font-size: 9px; line-height: 1.25; }
   .scheduled-more { margin-top: 7px; color: var(--muted); font-size: 10px; font-style: italic; }
   .conflict-line { color: var(--danger); background: var(--danger-bg); border: 1px solid rgba(248,113,113,.22); border-radius: 8px; padding: 8px; line-height: 1.35; }
+  .current-order-panel { margin-top: 10px; padding: 10px; border-radius: 12px; background: linear-gradient(180deg, rgba(0,204,255,.10), rgba(0,204,255,.035)); border: 1px solid rgba(0,204,255,.24); }
+  .current-order-title { color: var(--white); font-weight: 800; font-size: 11px; letter-spacing: .10em; text-transform: uppercase; margin-bottom: 7px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .current-order-chip { flex: none; border-radius: 999px; padding: 2px 7px; color: var(--cyan); background: rgba(0,204,255,.10); border: 1px solid rgba(0,204,255,.20); font: 9px 'DM Mono', monospace; }
+  .current-order-row { color: var(--text); font-size: 11px; line-height: 1.35; margin-top: 4px; }
+  .current-order-row strong { color: var(--muted); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; margin-right: 4px; }
+  .current-order-loading { color: var(--muted); font-size: 11px; line-height: 1.35; }
+  .current-order-pin { background: #f9a8d4; color: #3b0a24; border: 2px solid #fff; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 12px; box-shadow: 0 0 0 4px rgba(249,168,212,.20); }
+
 
   @media (max-width: 980px) {
     body.app-mode #appScreen { grid-template-columns: 300px 1fr; grid-template-rows: 1fr 310px; }
@@ -462,9 +476,11 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
   }
 });
 
-let map, cluster, orderLayer, routeLayer,
+let map, cluster, orderLayer, routeLayer, currentJobLayer,
     allFeatures = [], allMarkers = [], allOrders = [], scheduledOrders = [],
-    orderMarkers = [], selectedAssignOrderId = null;
+    orderMarkers = [], selectedAssignOrderId = null, autoRefreshTimer = null;
+const attemptedOffersByOrder = new Map();
+const currentOrderDetailsCache = new Map();
 
 function enterApp() {
   document.body.classList.add('app-mode');
@@ -474,9 +490,11 @@ function enterApp() {
   if (!map) initMap();
   bindAppEvents();
   loadDrivers();
+  startAutoRefresh();
 }
 
 function logout() {
+  stopAutoRefresh();
   Session.clear();
   document.getElementById('password').value = '';
   document.getElementById('errorMsg').classList.remove('show');
@@ -502,6 +520,7 @@ function initMap() {
   map.addLayer(cluster);
   orderLayer = L.layerGroup().addTo(map);
   routeLayer = L.layerGroup().addTo(map);
+  currentJobLayer = L.layerGroup().addTo(map);
 }
 
 function bindAppEvents() {
@@ -578,8 +597,9 @@ function getDriverCohorts(p) {
 function hasCateringCohort(p) {
   return getDriverCohorts(p).some(c => /cater/i.test(String(c)));
 }
-function driverCarIcon(cls, assignable) {
-  const html = `<div class="driver-car-marker ${cls}${assignable ? ' assignable' : ''}" title="${cls}">
+function driverCarIcon(cls, assignable, tried) {
+  const stateClass = tried ? 'tried' : cls;
+  const html = `<div class="driver-car-marker ${stateClass}${assignable ? ' assignable' : ''}" title="${tried ? 'tried for selected order' : cls}">
     <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5.25 11.25 6.7 6.9A3 3 0 0 1 9.55 4.8h4.9a3 3 0 0 1 2.85 2.1l1.45 4.35A2.75 2.75 0 0 1 21 13.95v3.3a.95.95 0 0 1-.95.95h-1.1a1.7 1.7 0 0 1-3.4 0h-7.1a1.7 1.7 0 0 1-3.4 0h-1.1A.95.95 0 0 1 3 17.25v-3.3c0-1.2.78-2.25 2.25-2.7Zm2.95-.45h7.6l-1.05-3.15a.9.9 0 0 0-.86-.63H10.1a.9.9 0 0 0-.86.63L8.2 10.8Zm-.55 4.65a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5Zm8.7 0a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5Z"/></svg>
   </div>`;
   return L.divIcon({ className: '', html, iconSize: [30, 30], iconAnchor: [15, 15], popupAnchor: [0, -14], tooltipAnchor: [0, -14] });
@@ -730,6 +750,60 @@ function scheduledOrderOverlaps(o, window) {
 function getSelectedAssignOrder() {
   return selectedAssignOrderId ? allOrders.find(o => String(o.orderId) === String(selectedAssignOrderId)) : null;
 }
+
+function sortOrdersByStart(orders) {
+  return [...(Array.isArray(orders) ? orders : [])].sort((a, b) => {
+    const ams = orderStartMs(a);
+    const bms = orderStartMs(b);
+    const aKnown = Number.isFinite(ams);
+    const bKnown = Number.isFinite(bms);
+    if (aKnown && bKnown && ams !== bms) return ams - bms;
+    if (aKnown !== bKnown) return aKnown ? -1 : 1;
+    return String(a.orderId || '').localeCompare(String(b.orderId || ''));
+  });
+}
+function getAttemptedSet(orderId) {
+  const key = String(orderId || '');
+  if (!attemptedOffersByOrder.has(key)) attemptedOffersByOrder.set(key, new Set());
+  return attemptedOffersByOrder.get(key);
+}
+function markDriverTriedForOrder(orderId, driverId) {
+  if (!orderId || !driverId) return;
+  getAttemptedSet(orderId).add(String(driverId));
+}
+function wasDriverTriedForOrder(orderId, driverId) {
+  if (!orderId || !driverId) return false;
+  return attemptedOffersByOrder.get(String(orderId))?.has(String(driverId)) || false;
+}
+function driverCurrentOrderId(p) {
+  return String(p?.OrderId ?? p?.orderId ?? p?.CurrentOrderId ?? p?.currentOrderId ?? '').trim();
+}
+function driverCurrentJobId(p) {
+  return String(p?.JobId ?? p?.jobId ?? p?.DeliveryId ?? p?.deliveryId ?? '').trim();
+}
+function currentOrderPanelHtml(p) {
+  const orderId = driverCurrentOrderId(p);
+  const jobId = driverCurrentJobId(p);
+  if (!orderId || orderId === '0') return '';
+  const cacheKey = orderId || jobId;
+  const cached = currentOrderDetailsCache.get(cacheKey);
+  if (!cached || cached.loading) {
+    return `<div class="current-order-panel"><div class="current-order-title"><span>Current Order</span><span class="current-order-chip">#${escapeHtml(orderId)}</span></div><div class="current-order-loading">Loading pickup/dropoff details…</div></div>`;
+  }
+  if (cached.error) {
+    return `<div class="current-order-panel"><div class="current-order-title"><span>Current Order</span><span class="current-order-chip">#${escapeHtml(orderId)}</span></div><div class="current-order-loading">${escapeHtml(cached.error)}</div></div>`;
+  }
+  const o = cached.order || cached;
+  return `<div class="current-order-panel">
+    <div class="current-order-title"><span>Current Order</span><span class="current-order-chip">#${escapeHtml(o.orderId || orderId)}</span></div>
+    <div class="current-order-row"><strong>Merchant</strong> ${escapeHtml(o.brandName || o.pickup?.entityName || '—')}</div>
+    <div class="current-order-row"><strong>Window</strong> ${escapeHtml(fmtTimeWindow(o.delWindowStart, o.delWindowEnd))}</div>
+    ${o.pickup?.scheduledAt ? `<div class="current-order-row"><strong>Pickup Time</strong> ${escapeHtml(fmtDateTime(o.pickup.scheduledAt))}</div>` : ''}
+    ${o.dropoff?.scheduledAt ? `<div class="current-order-row"><strong>Dropoff Time</strong> ${escapeHtml(fmtDateTime(o.dropoff.scheduledAt))}</div>` : ''}
+    <div class="current-order-row"><strong>Pickup</strong> ${escapeHtml(o.pickup?.address || o.pickup?.entityName || '—')}</div>
+    <div class="current-order-row"><strong>Dropoff</strong> ${escapeHtml(o.dropoff?.address || o.dropoff?.customerName || '—')}</div>
+  </div>`;
+}
 function getDriverConflictsForOrder(p, order) {
   const window = getConflictWindowForOrder(order);
   return getScheduledForDriver(driverIdValue(p)).filter(o => scheduledOrderOverlaps(o, window));
@@ -822,7 +896,8 @@ function buildPopup(p) {
       <div class="popup-row"><strong>Zone</strong> ${escapeHtml(p.Zone_Name || '—')}</div>
       <div class="popup-row"><strong>Region</strong> ${escapeHtml(p.Region_Name || '—')}</div>
       <div class="popup-row"><strong>Status</strong> ${escapeHtml(p.Driver_Status || '—')}</div>
-      ${p.OrderId && p.OrderId !== '0' ? `<div class="popup-row"><strong>Order</strong> ${escapeHtml(p.OrderId)}</div>` : ''}
+      ${driverCurrentOrderId(p) && driverCurrentOrderId(p) !== '0' ? `<div class="popup-row"><strong>Order</strong> ${escapeHtml(driverCurrentOrderId(p))}</div>` : ''}
+      ${currentOrderPanelHtml(p)}
       <div class="popup-row"><strong>Last Seen</strong> ${escapeHtml(p.Last_Seen_Online || '—')}</div>
       ${score.acceptanceRate !== undefined ? `<div class="popup-row"><strong>Accept</strong> ${escapeHtml(score.acceptanceRate)}% &nbsp; <strong>Complete</strong> ${escapeHtml(score.completionRate)}%</div>` : ''}
       ${cohorts.length ? `<div class="popup-row"><strong>Cohorts</strong> ${escapeHtml(cohorts.join(', '))}</div>` : ''}
@@ -868,12 +943,13 @@ function rebuildMarkers() {
     const [lng, lat] = f.geometry.coordinates;
     if (!isFinite(lat) || !isFinite(lng)) continue;
 
-    const assignable = selectedAssignOrderId && hasCateringCohort(p) && !hasConflict;
-    const marker = L.marker([lat, lng], { icon: driverCarIcon(cls, assignable) });
+    const triedForSelected = selectedOrder && wasDriverTriedForOrder(selectedOrder.orderId, driverIdValue(p));
+    const assignable = selectedAssignOrderId && hasCateringCohort(p) && !hasConflict && !triedForSelected;
+    const marker = L.marker([lat, lng], { icon: driverCarIcon(cls, assignable, triedForSelected) });
     marker.driverProperties = p;
     marker.bindPopup(buildPopup(p));
     marker.on('popupopen', () => bindDriverPopupActions(marker));
-    marker.bindTooltip(`#${p.DriverId} · ${p.Driver_Name || ''}${hasConflict ? ' · scheduled conflict' : ''}`, { direction: 'top', offset: [0, -6] });
+    marker.bindTooltip(`#${p.DriverId} · ${p.Driver_Name || ''}${triedForSelected ? ' · tried' : ''}${hasConflict ? ' · scheduled conflict' : ''}`, { direction: 'top', offset: [0, -6] });
     allMarkers.push(marker);
     shown++;
   }
@@ -913,10 +989,10 @@ function mergeByKey(items, keyFn) {
   }
   return [...map.values()];
 }
-function ingest(payload) {
-  ingestMergedDriverPayloads([payload]);
+function ingest(payload, opts = {}) {
+  ingestMergedDriverPayloads([payload], opts);
 }
-function ingestMergedDriverPayloads(payloads) {
+function ingestMergedDriverPayloads(payloads, opts = {}) {
   const merged = mergeByKey(
     payloads.flatMap(extractDriverFeatures),
     f => String(driverIdValue(f.properties) || f.properties?.DriverId || JSON.stringify(f.geometry?.coordinates || []))
@@ -924,7 +1000,7 @@ function ingestMergedDriverPayloads(payloads) {
   allFeatures = filterStaleOfflineDrivers(merged);
   rebuildZoneFilter();
   rebuildMarkers();
-  if (allMarkers.length) {
+  if (!opts.preserveView && allMarkers.length) {
     const bounds = L.latLngBounds(allFeatures
       .filter(f => f.geometry && f.geometry.coordinates)
       .map(f => [f.geometry.coordinates[1], f.geometry.coordinates[0]]));
@@ -947,6 +1023,7 @@ function clearOrders() {
   orderMarkers = [];
   if (orderLayer) orderLayer.clearLayers();
   if (routeLayer) routeLayer.clearLayers();
+  if (currentJobLayer) currentJobLayer.clearLayers();
   document.getElementById('ordersSub').textContent = 'New + scheduled ezCater coverage';
   document.getElementById('ordersList').innerHTML = '<div class="order-row" style="color: var(--muted); padding: 6px;">Load orders to map New ezCater pickups and scheduled-driver conflicts.</div>';
   setOrdersStatus('', '');
@@ -1002,7 +1079,7 @@ function orderPopup(o) {
     </div>`;
 }
 
-function mapOrders() {
+function mapOrders(opts = {}) {
   orderLayer.clearLayers();
   routeLayer.clearLayers();
   orderMarkers = [];
@@ -1019,7 +1096,7 @@ function mapOrders() {
   });
 
   const pts = allOrders.filter(orderHasPickup).map(o => [o.pickup.lat, o.pickup.lng]);
-  if (pts.length) {
+  if (!opts.preserveView && pts.length) {
     const bounds = L.latLngBounds(pts);
     if (bounds.isValid()) map.fitBounds(bounds, { padding: [40, 40], maxZoom: 11 });
   }
@@ -1031,6 +1108,7 @@ function renderOrdersList() {
     list.innerHTML = '<div class="order-row" style="color: var(--muted); padding: 6px;">No New ezCater orders found for the selected window.</div>';
     return;
   }
+  allOrders = sortOrdersByStart(allOrders);
   list.innerHTML = allOrders.map((o, idx) => {
     const canAssign = o.jobId && o.orderId;
     const activeAssign = String(selectedAssignOrderId || '') === String(o.orderId);
@@ -1177,6 +1255,7 @@ function updateAssignBanner() {
   el.classList.toggle('show', !!o);
 }
 function bindDriverPopupActions(marker) {
+  loadCurrentDriverOrderForPopup(marker);
   setTimeout(() => {
     const root = marker.getPopup()?.getElement();
     const btn = root?.querySelector('.popup-assign-driver');
@@ -1235,6 +1314,8 @@ async function sendOrderOfferWithDriver(orderId, driverId) {
   }
   if (status) status.textContent = `Sending offer to ${driver.Driver_Name || driver.DriverId}…`;
   setOrdersStatus(`Sending offer to ${driver.Driver_Name || driver.DriverId} for Order ${o.orderId}…`, 'info');
+  markDriverTriedForOrder(o.orderId, driver.DriverId);
+  rebuildMarkers();
 
   try {
     const r = await fetch('/api/assign-order', {
@@ -1262,6 +1343,8 @@ async function sendOrderOfferWithDriver(orderId, driverId) {
     const msg = 'Error: ' + err.message;
     if (status) status.textContent = msg;
     setOrdersStatus(msg, 'error');
+    rebuildMarkers();
+    renderOrdersList();
   }
 }
 
@@ -1340,7 +1423,85 @@ async function updateOtherFee(orderId) {
   }
 }
 
-async function loadOrders() {
+
+function drawCurrentDriverOrder(order, pan = false) {
+  if (!currentJobLayer || !order) return;
+  currentJobLayer.clearLayers();
+  const hasPickup = orderHasPickup(order);
+  const hasDropoff = orderHasDropoff(order);
+  if (!hasPickup && !hasDropoff) return;
+  const pickupIcon = L.divIcon({ className: '', html: '<div class="current-order-pin">P</div>', iconSize: [22, 22], iconAnchor: [11, 11] });
+  const dropIcon = L.divIcon({ className: '', html: '<div class="drop-pin">D</div>', iconSize: [18, 18], iconAnchor: [9, 9] });
+  if (hasPickup) L.marker([order.pickup.lat, order.pickup.lng], { icon: pickupIcon }).bindPopup(orderPopup(order)).addTo(currentJobLayer);
+  if (hasDropoff) L.marker([order.dropoff.lat, order.dropoff.lng], { icon: dropIcon }).bindPopup(orderPopup(order)).addTo(currentJobLayer);
+  if (hasPickup && hasDropoff) {
+    const line = L.polyline([[order.pickup.lat, order.pickup.lng], [order.dropoff.lat, order.dropoff.lng]], {
+      color: '#f9a8d4',
+      weight: 3,
+      opacity: 0.9,
+      dashArray: '4 7'
+    }).addTo(currentJobLayer);
+    if (pan) map.fitBounds(line.getBounds(), { padding: [55, 55], maxZoom: 13 });
+  } else if (pan && hasPickup) {
+    map.setView([order.pickup.lat, order.pickup.lng], Math.max(map.getZoom(), 12));
+  } else if (pan && hasDropoff) {
+    map.setView([order.dropoff.lat, order.dropoff.lng], Math.max(map.getZoom(), 12));
+  }
+}
+
+async function loadCurrentDriverOrderForPopup(marker) {
+  const p = marker?.driverProperties || {};
+  const orderId = driverCurrentOrderId(p);
+  const jobId = driverCurrentJobId(p);
+  if ((!orderId || orderId === '0') && !jobId) return;
+  const cacheKey = orderId || jobId;
+  const cached = currentOrderDetailsCache.get(cacheKey);
+  if (cached?.order) {
+    drawCurrentDriverOrder(cached.order, true);
+    return;
+  }
+  if (cached?.loading) return;
+  currentOrderDetailsCache.set(cacheKey, { loading: true });
+  try {
+    const params = new URLSearchParams();
+    if (orderId && orderId !== '0') params.set('orderId', orderId);
+    if (jobId) params.set('jobId', jobId);
+    const r = await fetch('/api/order-details?' + params.toString(), {
+      headers: { 'X-Usertoken': Session.userToken, 'Accept': 'application/json' }
+    });
+    const json = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(json.error || 'Could not load current order details');
+    const order = json.order || null;
+    if (!order) throw new Error('No order details found');
+    currentOrderDetailsCache.set(cacheKey, { order });
+    if (marker.isPopupOpen && marker.isPopupOpen()) {
+      marker.setPopupContent(buildPopup(p));
+      bindDriverPopupActions(marker);
+    }
+    drawCurrentDriverOrder(order, true);
+  } catch (err) {
+    currentOrderDetailsCache.set(cacheKey, { error: 'Order details unavailable: ' + err.message });
+    if (marker.isPopupOpen && marker.isPopupOpen()) {
+      marker.setPopupContent(buildPopup(p));
+      bindDriverPopupActions(marker);
+    }
+  }
+}
+
+function startAutoRefresh() {
+  stopAutoRefresh();
+  autoRefreshTimer = window.setInterval(() => {
+    if (!Session.isValid() || !document.body.classList.contains('app-mode')) return;
+    loadDrivers({ preserveView: true, quiet: true });
+    loadOrders({ preserveView: true, preserveSelection: true, quiet: true });
+  }, 2 * 60 * 1000);
+}
+function stopAutoRefresh() {
+  if (autoRefreshTimer) window.clearInterval(autoRefreshTimer);
+  autoRefreshTimer = null;
+}
+
+async function loadOrders(opts = {}) {
   if (!Session.isValid() || !Session.userToken) {
     setOrdersStatus('Session expired. Please log in again.', 'error');
     setTimeout(logout, 1200);
@@ -1349,7 +1510,7 @@ async function loadOrders() {
 
   const hours = document.getElementById('ordersWindow').value || '12';
   const regionIds = getSelectedRegionIds();
-  setOrdersStatus(`Loading New + Scheduled ezCater orders for ${selectedRegionLabel()}…`, 'info');
+  if (!opts.quiet) setOrdersStatus(`Loading New + Scheduled ezCater orders for ${selectedRegionLabel()}…`, 'info');
   document.getElementById('loadOrdersBtn').disabled = true;
 
   try {
@@ -1361,27 +1522,30 @@ async function loadOrders() {
       if (!r.ok) throw new Error(`${regionId ? regionNameFromId(regionId) + ': ' : ''}${json.error || 'Orders request failed (' + r.status + ')'}`);
       return json;
     }));
-    selectedAssignOrderId = null;
+    const previousAssignOrderId = selectedAssignOrderId;
+    allOrders = sortOrdersByStart(mergeByKey(results.flatMap(j => Array.isArray(j.orders) ? j.orders : []), o => String(o.orderId || o.jobId || JSON.stringify(o))));
+    scheduledOrders = sortOrdersByStart(mergeByKey(results.flatMap(j => Array.isArray(j.scheduledOrders) ? j.scheduledOrders : []), o => String(o.orderId || o.jobId || JSON.stringify(o))));
+    if (!opts.preserveSelection) selectedAssignOrderId = null;
+    else if (previousAssignOrderId && allOrders.some(o => String(o.orderId) === String(previousAssignOrderId))) selectedAssignOrderId = previousAssignOrderId;
+    else selectedAssignOrderId = null;
     updateAssignBanner();
-    allOrders = mergeByKey(results.flatMap(j => Array.isArray(j.orders) ? j.orders : []), o => String(o.orderId || o.jobId || JSON.stringify(o)));
-    scheduledOrders = mergeByKey(results.flatMap(j => Array.isArray(j.scheduledOrders) ? j.scheduledOrders : []), o => String(o.orderId || o.jobId || JSON.stringify(o)));
-    mapOrders();
+    mapOrders({ preserveView: !!opts.preserveView });
     renderOrdersList();
     rebuildMarkers();
     const windowEnds = results.map(j => j.windowEnd).filter(Boolean).sort();
     const capLabel = windowEnds.length ? ` · no later than ${fmtDateTime(windowEnds[0])}` : '';
     const scheduledLabel = scheduledOrders.length ? ` · ${scheduledOrders.length.toLocaleString()} scheduled drivers/orders checked` : ' · no scheduled conflicts found';
     document.getElementById('ordersSub').textContent = `${allOrders.length.toLocaleString()} New ezCater orders · next ${hours}h · ${selectedRegionLabel()}${capLabel}`;
-    setOrdersStatus(`Loaded ${allOrders.length.toLocaleString()} New orders and ${scheduledOrders.length.toLocaleString()} Scheduled orders for ${selectedRegionLabel()}${capLabel}${scheduledLabel}`, 'success');
+    if (!opts.quiet) setOrdersStatus(`Loaded ${allOrders.length.toLocaleString()} New orders and ${scheduledOrders.length.toLocaleString()} Scheduled orders for ${selectedRegionLabel()}${capLabel}${scheduledLabel}`, 'success');
   } catch (err) {
     console.error(err);
-    setOrdersStatus('Error: ' + err.message, 'error');
+    if (!opts.quiet) setOrdersStatus('Error: ' + err.message, 'error');
   } finally {
     document.getElementById('loadOrdersBtn').disabled = false;
   }
 }
 
-async function loadDrivers() {
+async function loadDrivers(opts = {}) {
   if (!Session.isValid() || !Session.userToken) {
     setStatus('Session expired. Please log in again.', 'error');
     setTimeout(logout, 1200);
@@ -1389,7 +1553,7 @@ async function loadDrivers() {
   }
 
   const regionIds = getSelectedRegionIds();
-  setStatus(`Loading drivers for ${selectedRegionLabel()}…`, 'info');
+  if (!opts.quiet) setStatus(`Loading drivers for ${selectedRegionLabel()}…`, 'info');
   document.getElementById('loadBtn').disabled = true;
   document.getElementById('refreshBtn').disabled = true;
 
@@ -1415,12 +1579,12 @@ async function loadDrivers() {
       return r.json();
     }));
 
-    ingestMergedDriverPayloads(payloads);
+    ingestMergedDriverPayloads(payloads, { preserveView: !!opts.preserveView });
     if (allOrders.length) renderOrdersList();
-    setStatus(`Loaded ${allFeatures.length.toLocaleString()} drivers for ${selectedRegionLabel()} · stale offline drivers hidden`, 'success');
+    if (!opts.quiet) setStatus(`Loaded ${allFeatures.length.toLocaleString()} drivers for ${selectedRegionLabel()} · stale offline drivers hidden`, 'success');
   } catch (e) {
     console.error(e);
-    setStatus('Error: ' + e.message, 'error');
+    if (!opts.quiet) setStatus('Error: ' + e.message, 'error');
     if (/unauthorized/i.test(e.message)) setTimeout(logout, 2500);
   } finally {
     document.getElementById('loadBtn').disabled = false;
