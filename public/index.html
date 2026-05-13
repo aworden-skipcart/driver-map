@@ -781,12 +781,23 @@ function driverCurrentOrderId(p) {
 function driverCurrentJobId(p) {
   return String(p?.JobId ?? p?.jobId ?? p?.DeliveryId ?? p?.deliveryId ?? '').trim();
 }
+function isStaleCurrentOrderCacheEntry(entry) {
+  return !!entry && (entry.reason === 'stale_current_order' || entry.stale === true);
+}
+function shouldShowRawCurrentOrderId(p) {
+  const orderId = driverCurrentOrderId(p);
+  const jobId = driverCurrentJobId(p);
+  if (!orderId || orderId === '0') return false;
+  const cached = currentOrderDetailsCache.get(orderId || jobId);
+  return !isStaleCurrentOrderCacheEntry(cached);
+}
 function currentOrderPanelHtml(p) {
   const orderId = driverCurrentOrderId(p);
   const jobId = driverCurrentJobId(p);
   if (!orderId || orderId === '0') return '';
   const cacheKey = orderId || jobId;
   const cached = currentOrderDetailsCache.get(cacheKey);
+  if (isStaleCurrentOrderCacheEntry(cached)) return '';
   if (!cached || cached.loading) {
     return `<div class="current-order-panel"><div class="current-order-title"><span>Current Order</span><span class="current-order-chip">#${escapeHtml(orderId)}</span></div><div class="current-order-loading">Loading pickup/dropoff details…</div></div>`;
   }
@@ -896,7 +907,7 @@ function buildPopup(p) {
       <div class="popup-row"><strong>Zone</strong> ${escapeHtml(p.Zone_Name || '—')}</div>
       <div class="popup-row"><strong>Region</strong> ${escapeHtml(p.Region_Name || '—')}</div>
       <div class="popup-row"><strong>Status</strong> ${escapeHtml(p.Driver_Status || '—')}</div>
-      ${driverCurrentOrderId(p) && driverCurrentOrderId(p) !== '0' ? `<div class="popup-row"><strong>Order</strong> ${escapeHtml(driverCurrentOrderId(p))}</div>` : ''}
+      ${shouldShowRawCurrentOrderId(p) ? `<div class="popup-row"><strong>Order</strong> ${escapeHtml(driverCurrentOrderId(p))}</div>` : ''}
       ${currentOrderPanelHtml(p)}
       <div class="popup-row"><strong>Last Seen</strong> ${escapeHtml(p.Last_Seen_Online || '—')}</div>
       ${score.acceptanceRate !== undefined ? `<div class="popup-row"><strong>Accept</strong> ${escapeHtml(score.acceptanceRate)}% &nbsp; <strong>Complete</strong> ${escapeHtml(score.completionRate)}%</div>` : ''}
@@ -1456,6 +1467,7 @@ async function loadCurrentDriverOrderForPopup(marker) {
   if ((!orderId || orderId === '0') && !jobId) return;
   const cacheKey = orderId || jobId;
   const cached = currentOrderDetailsCache.get(cacheKey);
+  if (isStaleCurrentOrderCacheEntry(cached)) return;
   if (cached?.order) {
     drawCurrentDriverOrder(cached.order, true);
     return;
@@ -1470,7 +1482,7 @@ async function loadCurrentDriverOrderForPopup(marker) {
       headers: { 'X-Usertoken': Session.userToken, 'Accept': 'application/json' }
     });
     const json = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(json.error || 'Could not load current order details');
+    if (!r.ok) throw new Error((json.reason ? json.reason + ': ' : '') + (json.error || 'Could not load current order details'));
     const order = json.order || null;
     if (!order) throw new Error('No order details found');
     currentOrderDetailsCache.set(cacheKey, { order });
@@ -1480,7 +1492,11 @@ async function loadCurrentDriverOrderForPopup(marker) {
     }
     drawCurrentDriverOrder(order, true);
   } catch (err) {
-    currentOrderDetailsCache.set(cacheKey, { error: 'Order details unavailable: ' + err.message });
+    const message = err.message || String(err);
+    const isStale = /stale_current_order|already appears complete|window has already passed|no longer active/i.test(message);
+    currentOrderDetailsCache.set(cacheKey, isStale
+      ? { stale: true, reason: 'stale_current_order' }
+      : { error: 'Order details unavailable: ' + message });
     if (marker.isPopupOpen && marker.isPopupOpen()) {
       marker.setPopupContent(buildPopup(p));
       bindDriverPopupActions(marker);
