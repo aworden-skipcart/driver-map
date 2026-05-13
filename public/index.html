@@ -1435,7 +1435,7 @@ async function updateOtherFee(orderId) {
 }
 
 
-function drawCurrentDriverOrder(order, pan = false) {
+function drawCurrentDriverOrder(order, pan = false, driverMarker = null) {
   if (!currentJobLayer || !order) return;
   currentJobLayer.clearLayers();
   const hasPickup = orderHasPickup(order);
@@ -1446,17 +1446,27 @@ function drawCurrentDriverOrder(order, pan = false) {
   if (hasPickup) L.marker([order.pickup.lat, order.pickup.lng], { icon: pickupIcon }).bindPopup(orderPopup(order)).addTo(currentJobLayer);
   if (hasDropoff) L.marker([order.dropoff.lat, order.dropoff.lng], { icon: dropIcon }).bindPopup(orderPopup(order)).addTo(currentJobLayer);
   if (hasPickup && hasDropoff) {
-    const line = L.polyline([[order.pickup.lat, order.pickup.lng], [order.dropoff.lat, order.dropoff.lng]], {
+    L.polyline([[order.pickup.lat, order.pickup.lng], [order.dropoff.lat, order.dropoff.lng]], {
       color: '#f9a8d4',
       weight: 3,
       opacity: 0.9,
       dashArray: '4 7'
     }).addTo(currentJobLayer);
-    if (pan) map.fitBounds(line.getBounds(), { padding: [55, 55], maxZoom: 13 });
-  } else if (pan && hasPickup) {
-    map.setView([order.pickup.lat, order.pickup.lng], Math.max(map.getZoom(), 12));
-  } else if (pan && hasDropoff) {
-    map.setView([order.dropoff.lat, order.dropoff.lng], Math.max(map.getZoom(), 12));
+  }
+
+  if (!pan) return;
+
+  const bounds = L.latLngBounds([]);
+  if (driverMarker && typeof driverMarker.getLatLng === 'function') bounds.extend(driverMarker.getLatLng());
+  if (hasPickup) bounds.extend([order.pickup.lat, order.pickup.lng]);
+  if (hasDropoff) bounds.extend([order.dropoff.lat, order.dropoff.lng]);
+
+  if (bounds.isValid()) {
+    map.fitBounds(bounds, {
+      paddingTopLeft: [70, 95],
+      paddingBottomRight: [70, 70],
+      maxZoom: 13
+    });
   }
 }
 
@@ -1469,7 +1479,7 @@ async function loadCurrentDriverOrderForPopup(marker) {
   const cached = currentOrderDetailsCache.get(cacheKey);
   if (isStaleCurrentOrderCacheEntry(cached)) return;
   if (cached?.order) {
-    drawCurrentDriverOrder(cached.order, true);
+    drawCurrentDriverOrder(cached.order, true, marker);
     return;
   }
   if (cached?.loading) return;
@@ -1490,7 +1500,7 @@ async function loadCurrentDriverOrderForPopup(marker) {
       marker.setPopupContent(buildPopup(p));
       bindDriverPopupActions(marker);
     }
-    drawCurrentDriverOrder(order, true);
+    drawCurrentDriverOrder(order, true, marker);
   } catch (err) {
     const message = err.message || String(err);
     const isStale = /stale_current_order|already appears complete|window has already passed|no longer active/i.test(message);
