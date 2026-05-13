@@ -483,10 +483,6 @@ let map, cluster, orderLayer, routeLayer, currentJobLayer,
 const attemptedOffersByOrder = new Map();
 const currentOrderDetailsCache = new Map();
 const currentOrderDetailsFetches = new Map();
-const currentOrderDetailsQueue = [];
-let currentOrderDetailsActiveFetches = 0;
-const CURRENT_ORDER_LOOKUP_CONCURRENCY = 4;
-const MAX_CURRENT_ORDER_PRELOADS_PER_REBUILD = 80;
 
 function enterApp() {
   document.body.classList.add('app-mode');
@@ -790,24 +786,6 @@ function driverCurrentJobId(p) {
 function isStaleCurrentOrderCacheEntry(entry) {
   return !!entry && (entry.reason === 'stale_current_order' || entry.stale === true);
 }
-function pumpCurrentOrderQueue() {
-  while (currentOrderDetailsActiveFetches < CURRENT_ORDER_LOOKUP_CONCURRENCY && currentOrderDetailsQueue.length) {
-    const item = currentOrderDetailsQueue.shift();
-    currentOrderDetailsActiveFetches++;
-    item.run()
-      .then(item.resolve, item.resolve)
-      .finally(() => {
-        currentOrderDetailsActiveFetches = Math.max(0, currentOrderDetailsActiveFetches - 1);
-        pumpCurrentOrderQueue();
-      });
-  }
-}
-function enqueueCurrentOrderLookup(run) {
-  return new Promise(resolve => {
-    currentOrderDetailsQueue.push({ run, resolve });
-    pumpCurrentOrderQueue();
-  });
-}
 function shouldShowRawCurrentOrderId(p) {
   const orderId = driverCurrentOrderId(p);
   const jobId = driverCurrentJobId(p);
@@ -832,9 +810,20 @@ function driverHasPendingCurrentOrderCheck(p) {
   const key = currentOrderCacheKeyForDriver(p);
   if (!key) return false;
   const cached = currentOrderDetailsCache.get(key);
+  // Do not treat every driver with a stale current-order id as pending.
+  // Current-order detail checks are now lazy/on-demand to avoid launching hundreds
+  // of /api/order-details requests during assign mode marker rebuilds.
+  return !!cached?.loading || currentOrderDetailsFetches.has(key);
+}
+
+function driverNeedsCurrentOrderCheck(p) {
+  const key = currentOrderCacheKeyForDriver(p);
+  if (!key) return false;
+  const cached = currentOrderDetailsCache.get(key);
+  if (!cached) return true;
   if (isStaleCurrentOrderCacheEntry(cached)) return false;
-  if (cached?.order || cached?.error || cached?.stale) return false;
-  return true;
+  if (cached.order || cached.error) return false;
+  return !!cached.loading || currentOrderDetailsFetches.has(key);
 }
 function currentOrderConflictForOrder(p, order) {
   const current = getCachedCurrentOrderForDriver(p);
@@ -1000,11 +989,15 @@ function rebuildMarkers() {
   const selectedOrder = getSelectedAssignOrder();
 
   let shown = 0, online = 0, onJob = 0, scheduled = 0;
-  let currentOrderPreloadsQueued = 0;
 
   for (const f of allFeatures) {
     const p = f.properties;
     const cls = classify(p);
+    const hasConflict = !!selectedOrder && driverHasConflictForSelectedOrder(p);
+    // Do not preload current-order details here. rebuildMarkers() can run for
+    // hundreds/thousands of drivers, and firing one request per marker can exhaust
+    // browser/Vercel resources. Details load when a popup opens or when a driver
+    // is actually selected for assignment.
     if (cls === 'online') online++;
     if (cls === 'on-job') onJob++;
     if (getDriverScheduledNext24(p).length) scheduled++;
@@ -1013,18 +1006,12 @@ function rebuildMarkers() {
     if (cls === 'on-job' && !showOnJob) continue;
     if (cls === 'offline' && !showOffline) continue;
     if (cateringOnly && !hasCateringCohort(p)) continue;
+    if (hideScheduledConflicts && selectedOrder && hasConflict) continue;
     if (zone && p.Zone_Name !== zone) continue;
     if (search) {
       const hay = [p.DriverId, p.Driver_Name, p.Phone_Number, p.Email, p.Zone_Name, p.OrderId].filter(Boolean).join(' ').toLowerCase();
       if (!hay.includes(search)) continue;
     }
-
-    if (selectedOrder && currentOrderCacheKeyForDriver(p) && currentOrderPreloadsQueued < MAX_CURRENT_ORDER_PRELOADS_PER_REBUILD) {
-      currentOrderPreloadsQueued++;
-      preloadCurrentDriverOrder(p);
-    }
-    const hasConflict = !!selectedOrder && driverHasConflictForSelectedOrder(p);
-    if (hideScheduledConflicts && selectedOrder && hasConflict) continue;
 
     const [lng, lat] = f.geometry.coordinates;
     if (!isFinite(lat) || !isFinite(lng)) continue;
@@ -1099,6 +1086,36 @@ function setOrdersStatus(msg, kind) {
   const el = document.getElementById('ordersStatus');
   el.textContent = msg;
   el.className = 'status-msg ' + (kind || '');
+}
+
+function isDeliveryNotFoundOrNotNewMessage(message) {
+  return /Delivery\s+Not\s+Found\s+Or\s+Delivery\s+Is\s+Not\s+New/i.test(String(message || ''));
+}
+
+function hideOrderFromPanelUntilReload(orderId) {
+  const id = String(orderId || '');
+  if (!id) return false;
+
+  const before = allOrders.length;
+  allOrders = allOrders.filter(o => String(o.orderId) !== id);
+  const removed = allOrders.length !== before;
+
+  if (String(selectedAssignOrderId || '') === id) {
+    selectedAssignOrderId = null;
+    updateAssignBanner();
+  }
+
+  if (routeLayer) routeLayer.clearLayers();
+  if (currentJobLayer) currentJobLayer.clearLayers();
+  mapOrders({ preserveView: true });
+  renderOrdersList();
+  rebuildMarkers();
+
+  const hours = document.getElementById('ordersWindow')?.value || '12';
+  const sub = document.getElementById('ordersSub');
+  if (sub) sub.textContent = `${allOrders.length.toLocaleString()} New ezCater orders · next ${hours}h · ${selectedRegionLabel()}`;
+
+  return removed;
 }
 
 function clearOrders() {
@@ -1391,10 +1408,16 @@ async function sendOrderOfferWithDriver(orderId, driverId) {
     if (status) status.textContent = 'Selected driver does not show a Catering cohort in the driver location feed.';
     return;
   }
+  if (driverNeedsCurrentOrderCheck(driver)) {
+    const msg = `Checking current order details for ${driver.Driver_Name || driver.DriverId} before sending offer…`;
+    if (status) status.textContent = msg;
+    setOrdersStatus(msg, 'info');
+    await preloadCurrentDriverOrder(driver);
+  }
+
   const conflictInfo = getDriverConflictInfoForOrder(driver, o);
   if (conflictInfo.pending) {
-    preloadCurrentDriverOrder(driver);
-    const msg = 'Driver has a current order in the feed. Wait for current-order details to load before assigning.';
+    const msg = 'Current-order details are still loading. Try again in a moment.';
     if (status) status.textContent = msg;
     setOrdersStatus(msg, 'error');
     return;
@@ -1424,7 +1447,9 @@ async function sendOrderOfferWithDriver(orderId, driverId) {
     const json = await r.json().catch(() => ({}));
     if (!r.ok) {
       const upstreamMsg = json.message || json.Message || json.upstream?.message || json.upstream?.Message;
-      throw new Error(upstreamMsg || json.error || 'Assignment failed');
+      const assignmentError = new Error(upstreamMsg || json.error || 'Assignment failed');
+      assignmentError.reason = json.reason || json.upstream?.reason || json.upstream?.Reason || '';
+      throw assignmentError;
     }
     const msg = json.message || json.Message || `Offer sent to ${driver.Driver_Name || driver.DriverId}. Assign mode is still on.`;
     if (status) status.textContent = msg;
@@ -1434,7 +1459,19 @@ async function sendOrderOfferWithDriver(orderId, driverId) {
     renderOrdersList();
   } catch (err) {
     console.error(err);
-    const msg = 'Error: ' + err.message;
+    const rawMessage = err.message || String(err);
+
+    if (err.reason === 'delivery_not_found_or_not_new' || isDeliveryNotFoundOrNotNewMessage(rawMessage)) {
+      const removed = hideOrderFromPanelUntilReload(o.orderId);
+      const msg = removed
+        ? `Order ${o.orderId} is no longer New or available, so it was hidden from the order panel until orders load again.`
+        : `Order ${o.orderId} is no longer New or available.`;
+      if (status) status.textContent = msg;
+      setOrdersStatus(msg, 'info');
+      return;
+    }
+
+    const msg = 'Error: ' + rawMessage;
     if (status) status.textContent = msg;
     setOrdersStatus(msg, 'error');
     rebuildMarkers();
@@ -1564,28 +1601,37 @@ async function preloadCurrentDriverOrder(p) {
   if (currentOrderDetailsFetches.has(cacheKey)) return currentOrderDetailsFetches.get(cacheKey);
 
   currentOrderDetailsCache.set(cacheKey, { loading: true });
-  const promise = enqueueCurrentOrderLookup(async () => {
+  const promise = (async () => {
     try {
       const params = new URLSearchParams();
       if (orderId && orderId !== '0') params.set('orderId', orderId);
       if (jobId) params.set('jobId', jobId);
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 12000);
       const r = await fetch('/api/order-details?' + params.toString(), {
-        headers: { 'X-Usertoken': Session.userToken, 'Accept': 'application/json' }
+        headers: { 'X-Usertoken': Session.userToken, 'Accept': 'application/json' },
+        signal: controller.signal
       });
+      window.clearTimeout(timeout);
       const json = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error((json.reason ? json.reason + ': ' : '') + (json.error || 'Could not load current order details'));
-      if (json.stale || json.reason === 'stale_current_order' || json.status === false) {
+      if (json.stale || json.reason === 'stale_current_order') {
         const entry = { stale: true, reason: 'stale_current_order' };
         currentOrderDetailsCache.set(cacheKey, entry);
         return entry;
       }
+      if (!r.ok) throw new Error((json.reason ? json.reason + ': ' : '') + (json.error || 'Could not load current order details'));
+      if (json.status === false && !json.order) throw new Error(json.error || json.reason || 'Current order details unavailable');
       const order = json.order || null;
-      if (!order) throw new Error('No order details found');
+      if (!order) {
+        const entry = { stale: true, reason: 'stale_current_order' };
+        currentOrderDetailsCache.set(cacheKey, entry);
+        return entry;
+      }
       const entry = { order };
       currentOrderDetailsCache.set(cacheKey, entry);
       return entry;
     } catch (err) {
-      const message = err.message || String(err);
+      const message = (err.name === 'AbortError') ? 'current order lookup timed out' : (err.message || String(err));
       const isStale = /stale_current_order|already appears complete|window has already passed|no longer active|Order not found/i.test(message);
       const entry = isStale
         ? { stale: true, reason: 'stale_current_order' }
@@ -1601,7 +1647,7 @@ async function preloadCurrentDriverOrder(p) {
       // The popup itself is refreshed by loadCurrentDriverOrderForPopup().
       if (allOrders.length) renderOrdersList();
     }
-  });
+  })();
   currentOrderDetailsFetches.set(cacheKey, promise);
   return promise;
 }
