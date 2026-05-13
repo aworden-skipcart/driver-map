@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Skipcart Driver Map</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="512x512" href="/favicon.png">
+<link rel="shortcut icon" href="/favicon.ico">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800;900&family=Barlow:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
@@ -95,6 +99,7 @@
   #sidebar { background: var(--panel); border-right: 1px solid var(--border2); overflow-y: auto; display: flex; flex-direction: column; }
   .topbar { padding: 14px 18px; border-bottom: 1px solid var(--border2); display: flex; align-items: center; justify-content: space-between; background: linear-gradient(135deg, rgba(0,204,255,0.06), transparent); }
   .topbar-title { font-family: 'Barlow Condensed', sans-serif; font-size: 13px; font-weight: 800; letter-spacing: 0.2em; text-transform: uppercase; color: var(--cyan); }
+  .topbar-logo { height: 28px; width: auto; max-width: 170px; display: block; object-fit: contain; filter: brightness(0) invert(1); opacity: .94; }
   .topbar-sub { font-size: 10px; color: var(--muted); font-family: 'DM Mono', monospace; margin-top: 2px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .logout-btn { background: none; border: 1px solid var(--border2); color: var(--muted); border-radius: 6px; padding: 5px 9px; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; font-family: 'Barlow Condensed', sans-serif; transition: all .15s; }
   .logout-btn:hover { color: var(--danger); border-color: rgba(248,113,113,0.3); }
@@ -345,7 +350,7 @@
   <aside id="sidebar">
     <div class="topbar">
       <div>
-        <div class="topbar-title">Driver Map</div>
+        <div class="topbar-title"><img class="topbar-logo" src="https://wlbhr.stripocdn.email/content/guids/CABINET_c526811c74c3ce1f43298430907f199d8b157608780978a27c52032a074479af/images/skipcartnewbluenoshadow_1.png" alt="Skipcart Driver Map"></div>
         <div class="topbar-sub" id="userEmail">—</div>
       </div>
       <button class="logout-btn" id="logoutBtn">Logout</button>
