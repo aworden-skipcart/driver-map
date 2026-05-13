@@ -25,8 +25,10 @@ export default async function handler(req, res) {
 
   try {
     const now = new Date();
-    const start = new Date(now.getTime() - 36 * 60 * 60 * 1000);
-    const end = new Date(now.getTime() + 36 * 60 * 60 * 1000);
+    // A driver's "current order" value can linger in the map feed after the work is over.
+    // Keep the lookup window tight so yesterday's completed work does not get treated as active.
+    const start = new Date(now.getTime() - 4 * 60 * 60 * 1000);
+    const end = new Date(now.getTime() + 24 * 60 * 60 * 1000);
     const raw = await searchOrder({ orderId, jobId, start, end, appToken: APPTOKEN, userToken });
     if (!raw) return res.status(404).json({ error: 'Order not found' });
 
@@ -39,6 +41,14 @@ export default async function handler(req, res) {
 
     const errors = [stepsResult.error, jobDetailsResult.error, paymentResult.error].filter(Boolean).join(' | ') || null;
     const order = normalizeOrder(raw, stepsResult.result, jobDetailsResult.result, paymentResult.result, errors);
+    const relevance = getCurrentOrderRelevance(order, now);
+    if (!relevance.active) {
+      return res.status(404).json({
+        error: relevance.reason || 'Current order is no longer active',
+        reason: 'stale_current_order',
+        order
+      });
+    }
     res.setHeader('Cache-Control', 'no-store');
     return res.status(200).json({ status: true, order });
   } catch (err) {
@@ -235,6 +245,39 @@ function normalizeOrder(order, stepsResult, jobDetailsResult, paymentResult, enr
     stops,
     stepsError: enrichError || null
   };
+}
+
+function getCurrentOrderRelevance(order, now = new Date()) {
+  const status = String(order?.orderStatus || '').toLowerCase();
+  if (/delivered|cancelled|canceled|complete|completed/.test(status)) {
+    return { active: false, reason: 'Current order already appears complete.' };
+  }
+
+  const nowMs = now.getTime();
+  const startMs = parseDateMs(order?.delWindowStart || order?.pickup?.scheduledAt);
+  const endMs = parseDateMs(order?.delWindowEnd || order?.dropoff?.scheduledAt || order?.delWindowStart || order?.pickup?.scheduledAt);
+
+  // Allow a small post-window buffer for jobs that are still being wrapped up, but do not
+  // surface old jobs from stale driver feed values.
+  const postWindowBufferMs = 2 * 60 * 60 * 1000;
+  const futureBufferMs = 24 * 60 * 60 * 1000;
+
+  if (Number.isFinite(endMs) && endMs < nowMs - postWindowBufferMs) {
+    return { active: false, reason: 'Current order window has already passed.' };
+  }
+  if (Number.isFinite(startMs) && startMs > nowMs + futureBufferMs) {
+    return { active: false, reason: 'Current order is outside the active dispatch window.' };
+  }
+  return { active: true };
+}
+
+function parseDateMs(value) {
+  if (!value) return NaN;
+  const raw = String(value).trim();
+  if (!raw) return NaN;
+  const normalized = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,7})?)?$/.test(raw) ? raw + 'Z' : raw;
+  const ms = Date.parse(normalized);
+  return Number.isFinite(ms) ? ms : NaN;
 }
 
 function distanceMilesBetween(lat1, lng1, lat2, lng2) {
