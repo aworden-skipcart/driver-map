@@ -677,17 +677,26 @@ function stopWeatherLoopTimer() {
   }
 }
 
+function removeWeatherLayerHard(layer) {
+  if (!layer || !map) return;
+  try {
+    if (typeof layer.setOpacity === 'function') layer.setOpacity(0);
+    if (typeof layer._abortLoading === 'function') layer._abortLoading();
+    if (map.hasLayer(layer)) map.removeLayer(layer);
+    if (typeof layer._removeAllTiles === 'function') layer._removeAllTiles();
+  } catch (err) {
+    console.warn('Weather layer cleanup warning:', err);
+  }
+}
+
 function clearWeatherLoopLayers() {
-  weatherLoopLayerCache.forEach(layer => {
-    if (map && map.hasLayer(layer)) map.removeLayer(layer);
-  });
+  weatherLoopLayerCache.forEach(layer => removeWeatherLayerHard(layer));
   weatherLoopLayerCache.clear();
 }
 
 function hideWeatherLiveLayer() {
-  if (weatherLiveLayer && map && map.hasLayer(weatherLiveLayer)) {
-    map.removeLayer(weatherLiveLayer);
-  }
+  removeWeatherLayerHard(weatherLiveLayer);
+  weatherLiveLayer = null;
 }
 
 function showWeatherLive() {
@@ -799,6 +808,9 @@ async function preloadWeatherFramesSequentially() {
 
 function showWeatherFrame(index) {
   if (!weatherLoopFrames.length) return;
+  // Live/no-time WMS must stay completely removed while timed loop frames are playing.
+  // Otherwise the latest live image blends with older frames and creates a ghosted/holographic effect.
+  hideWeatherLiveLayer();
   weatherLoopIndex = ((index % weatherLoopFrames.length) + weatherLoopFrames.length) % weatherLoopFrames.length;
   const frame = weatherLoopFrames[weatherLoopIndex];
   weatherLoopLayerCache.forEach(layer => layer.setOpacity(0));
@@ -820,7 +832,9 @@ async function startWeatherLoop() {
   try {
     weatherLoopFrames = await fetchWeatherFrameTimes();
     if (!weatherLoopFrames.length) throw new Error('No recent radar frames');
+    hideWeatherLiveLayer();
     await preloadWeatherFramesSequentially();
+    hideWeatherLiveLayer();
     weatherLoopIndex = 0;
     showWeatherFrame(0);
     weatherLoopTimer = setInterval(() => showWeatherFrame(weatherLoopIndex + 1), WEATHER_LOOP_SPEED_MS);
