@@ -94,8 +94,8 @@
   .version-text { font-size: 10px; color: var(--border2); margin-top: 6px; font-family: 'DM Mono', monospace; }
 
   #appScreen { display: none; height: 100vh; }
-  body.app-mode #appScreen { display: grid; grid-template-columns: 320px minmax(0, 1fr) 380px; position: relative; }
-  body.app-mode.sidebar-collapsed #appScreen { grid-template-columns: 0 minmax(0, 1fr) 380px; }
+  body.app-mode #appScreen { display: grid; grid-template-columns: 320px minmax(0, 1fr) 480px; position: relative; }
+  body.app-mode.sidebar-collapsed #appScreen { grid-template-columns: 0 minmax(0, 1fr) 480px; }
   body.app-mode.sidebar-collapsed #sidebar { transform: translateX(-100%); pointer-events: none; }
   body.app-mode.sidebar-collapsed #sidebarToggle { left: 0; }
   body.app-mode.sidebar-collapsed #sidebarToggle .collapse-icon::before { content: '>'; }
@@ -197,7 +197,7 @@
   .weather-row span { text-align: right; font-family: 'DM Mono', monospace; color: var(--cyan); }
   .weather-note { margin-top: 9px; color: var(--muted); font-size: 10px; line-height: 1.35; }
 
-  #ordersPanel { background: var(--panel); border-left: 1px solid var(--border2); overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
+  #ordersPanel { background: var(--panel); border-left: 1px solid var(--border2); overflow: hidden; display: flex; flex-direction: column; min-width: 460px; }
   .orders-header { padding: 14px 16px; border-bottom: 1px solid var(--border2); background: linear-gradient(135deg, rgba(0,204,255,0.06), transparent); }
   .orders-title-row { display: flex; align-items: center; gap: 8px; }
   .orders-title { font-family: 'Barlow Condensed', sans-serif; font-size: 13px; font-weight: 800; letter-spacing: 0.2em; text-transform: uppercase; color: var(--cyan); }
@@ -365,7 +365,7 @@
     #sidebar { grid-row: 1 / span 2; width: 300px; max-width: 300px; min-width: 300px; }
     #sidebarToggle { left: 300px; }
     #mapShell { grid-column: 2; grid-row: 1; }
-    #ordersPanel { grid-column: 2; grid-row: 2; border-left: none; border-top: 1px solid var(--border2); }
+    #ordersPanel { grid-column: 2; grid-row: 2; border-left: none; border-top: 1px solid var(--border2); min-width: 0; }
     .weather-toggle { top: 10px; right: 10px; width: 40px; height: 40px; border-radius: 13px; }
     .weather-panel { top: 58px; right: 10px; width: min(340px, calc(100% - 20px)); }
   }
