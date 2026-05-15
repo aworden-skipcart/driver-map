@@ -1574,7 +1574,7 @@ function orderModeConfig(mode = currentOrdersMode) {
     empty: 'No In Progress ezCater orders found for the current date.',
     statusClass: 'inprogress',
     assignEnabled: false,
-    feeEnabled: false
+    feeEnabled: true
   };
   if (mode === 'completed') return {
     mode: 'completed',
@@ -1585,7 +1585,7 @@ function orderModeConfig(mode = currentOrdersMode) {
     empty: 'No Completed ezCater orders found for the current date.',
     statusClass: 'completed',
     assignEnabled: false,
-    feeEnabled: false
+    feeEnabled: true
   };
   return {
     mode: 'unassigned',
@@ -2421,9 +2421,11 @@ async function loadOrders(opts = {}) {
     scheduledOrders = cfg.mode === 'unassigned'
       ? sortOrdersByStart(mergeByKey(results.flatMap(j => Array.isArray(j.scheduledOrders) ? j.scheduledOrders : []), o => String(o.orderId || o.jobId || JSON.stringify(o))))
       : [];
-    if (!opts.preserveSelection || !cfg.assignEnabled) { selectedAssignOrderId = null; openFeeOrderId = null; lastFeeUpdate = null; }
-    else if (previousAssignOrderId && allOrders.some(o => String(o.orderId) === String(previousAssignOrderId))) selectedAssignOrderId = previousAssignOrderId;
+    if (!opts.preserveSelection) { selectedAssignOrderId = null; openFeeOrderId = null; lastFeeUpdate = null; }
+    else if (previousAssignOrderId && cfg.assignEnabled && allOrders.some(o => String(o.orderId) === String(previousAssignOrderId))) selectedAssignOrderId = previousAssignOrderId;
     else selectedAssignOrderId = null;
+    if (openFeeOrderId && !allOrders.some(o => String(o.orderId) === String(openFeeOrderId))) openFeeOrderId = null;
+    if (lastFeeUpdate && !allOrders.some(o => String(o.orderId) === String(lastFeeUpdate.orderId || ''))) lastFeeUpdate = null;
     updateAssignBanner();
     mapOrders({ preserveView: !!opts.preserveView });
     renderOrdersList();
