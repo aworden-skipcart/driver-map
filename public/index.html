@@ -199,19 +199,14 @@
 
   #ordersPanel { background: var(--panel); border-left: 1px solid var(--border2); overflow: hidden; display: flex; flex-direction: column; min-width: 460px; }
   .orders-header { padding: 14px 16px; border-bottom: 1px solid var(--border2); background: linear-gradient(135deg, rgba(0,204,255,0.06), transparent); }
-  .orders-title-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .orders-title-row { display: flex; align-items: center; gap: 8px; }
   .orders-title { font-family: 'Barlow Condensed', sans-serif; font-size: 13px; font-weight: 800; letter-spacing: 0.2em; text-transform: uppercase; color: var(--cyan); }
-  .orders-mode-tabs { margin-left: auto; display: inline-grid; grid-template-columns: repeat(3, auto); gap: 4px; padding: 3px; border: 1px solid rgba(0,204,255,.18); border-radius: 999px; background: rgba(0,0,0,.22); }
-  .orders-mode-btn { min-height: 24px; padding: 0 8px; border: none; border-radius: 999px; background: transparent; color: var(--muted); font-family: 'Barlow Condensed', sans-serif; font-size: 10px; font-weight: 900; letter-spacing: .10em; text-transform: uppercase; cursor: pointer; white-space: nowrap; }
-  .orders-mode-btn:hover { color: var(--text); background: rgba(0,204,255,.08); }
-  .orders-mode-btn.active { color: #020617; background: var(--cyan); box-shadow: 0 0 14px rgba(0,204,255,.18); }
-  .orders-window-control.is-hidden { display: none; }
-  .order-status-chip { display: inline-flex; align-items: center; justify-content: center; min-height: 21px; padding: 2px 8px; border-radius: 999px; border: 1px solid rgba(148,163,184,.18); background: rgba(0,0,0,.22); color: var(--muted); font-family: 'DM Mono', monospace; font-size: 9px; white-space: nowrap; }
-  .order-status-chip.unassigned { color: var(--cyan); border-color: rgba(0,204,255,.25); background: rgba(0,204,255,.10); }
-  .order-status-chip.inprogress { color: var(--on-job); border-color: rgba(245,158,11,.28); background: rgba(245,158,11,.10); }
-  .order-status-chip.completed { color: var(--success); border-color: rgba(74,222,128,.24); background: rgba(74,222,128,.10); }
-  .order-driver-line { margin-top: 10px; padding: 8px 10px; border-radius: 9px; background: rgba(0,0,0,.16); border: 1px solid rgba(148,163,184,.12); color: var(--muted); font-size: 10px; line-height: 1.35; }
-  .order-driver-line strong { color: var(--text); font-weight: 800; }
+  .order-mode-tabs { margin-left: auto; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; flex: 1; max-width: 335px; }
+  .order-mode-tab { min-width: 0; height: 26px; padding: 0 7px; border-radius: 999px; border: 1px solid var(--border2); background: rgba(0,0,0,.22); color: var(--muted); font-family: 'Barlow Condensed', sans-serif; font-size: 10px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .order-mode-tab:hover { border-color: rgba(0,204,255,.45); color: var(--text); }
+  .order-mode-tab.active { color: #031018; background: var(--cyan); border-color: var(--cyan); box-shadow: 0 0 16px rgba(0,204,255,.22); }
+  .orders-window-row.hidden { display: none; }
+  .order-status-chip { display: inline-flex; align-items: center; justify-content: center; min-height: 18px; padding: 2px 8px; border-radius: 999px; border: 1px solid rgba(0,204,255,.28); background: rgba(0,204,255,.08); color: var(--cyan); font: 700 10px 'DM Mono', monospace; white-space: nowrap; }
   .info-tip { width: 16px; height: 16px; border-radius: 999px; display: inline-grid; place-items: center; border: 1px solid rgba(0,204,255,.34); background: rgba(0,204,255,.10); color: var(--cyan); font: 700 10px 'DM Mono', monospace; cursor: help; flex: none; }
   .orders-sub { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .status-inline { display: inline-flex; align-items: center; gap: 6px; }
@@ -550,17 +545,18 @@
     <div class="orders-header">
       <div class="orders-title-row">
         <div class="orders-title">Orders</div>
-        <span class="info-tip" id="ordersInfo" title="Unassigned New orders use a 12/24 hour window. In Progress and Completed use the current Central date." aria-label="Order load details">i</span>
-        <div class="orders-mode-tabs" id="ordersModeTabs" aria-label="Order status group">
-          <button type="button" class="orders-mode-btn active" data-order-mode="unassigned">Unassigned</button>
-          <button type="button" class="orders-mode-btn" data-order-mode="in-progress">In Progress</button>
-          <button type="button" class="orders-mode-btn" data-order-mode="completed">Completed</button>
+        <span class="info-tip" id="ordersInfo" title="New + scheduled ezCater coverage" aria-label="Order load details">i</span>
+        <div class="order-mode-tabs" id="orderModeTabs" aria-label="Order sections">
+          <button type="button" class="order-mode-tab active" data-order-mode="unassigned">Unassigned</button>
+          <button type="button" class="order-mode-tab" data-order-mode="in-progress">In Progress</button>
+          <button type="button" class="order-mode-tab" data-order-mode="scheduled">Scheduled</button>
+          <button type="button" class="order-mode-tab" data-order-mode="completed">Completed</button>
         </div>
       </div>
-      <div class="orders-sub" id="ordersSub">Unassigned New ezCater orders + scheduled conflict coverage</div>
+      <div class="orders-sub" id="ordersSub">New + scheduled ezCater coverage</div>
     </div>
     <div class="orders-controls">
-      <div class="orders-window-control" id="ordersWindowControl">
+      <div class="orders-window-row" id="ordersWindowRow">
         <label class="app-label" for="ordersWindow">Window</label>
         <select id="ordersWindow" class="app-select">
           <option value="12" selected>Next 12 hours</option>
@@ -666,8 +662,7 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
 
 let map, cluster, orderLayer, routeLayer, currentJobLayer,
     allFeatures = [], allMarkers = [], allOrders = [], scheduledOrders = [],
-    orderMarkers = [], selectedAssignOrderId = null, openFeeOrderId = null, lastFeeUpdate = null, autoRefreshTimer = null,
-    currentOrdersMode = 'unassigned';
+    orderMarkers = [], selectedAssignOrderId = null, openFeeOrderId = null, lastFeeUpdate = null, autoRefreshTimer = null, currentOrderMode = 'unassigned';
 
 const WEATHER_WMS_URL = 'https://opengeo.ncep.noaa.gov/geoserver/conus/ows';
 const WEATHER_RADAR_LAYER = 'conus_cref_qcd';
@@ -686,6 +681,62 @@ const attemptedOffersByOrder = new Map();
 const currentOrderDetailsCache = new Map();
 const currentOrderDetailsFetches = new Map();
 
+const ORDER_MODE_CONFIG = {
+  unassigned: {
+    label: 'Unassigned',
+    empty: 'No New ezCater orders found for the selected window.',
+    initial: 'Load Unassigned orders to map New ezCater pickups and scheduled-driver conflicts.',
+    loading: () => `Loading New ezCater orders for ${selectedRegionLabel()}…`,
+    info: (count, hours, cap, sched) => `${count.toLocaleString()} New ezCater orders · next ${hours}h · ${selectedRegionLabel()}${cap}`,
+    statusDetail: (count, hours, cap, sched) => `${count.toLocaleString()} New orders and ${sched.toLocaleString()} Scheduled conflict orders checked for ${selectedRegionLabel()}${cap}`,
+    allowAssign: true,
+    usesWindow: true
+  },
+  'in-progress': {
+    label: 'In Progress',
+    empty: 'No Confirmed or Out For Delivery ezCater orders found for today.',
+    initial: 'Load In Progress orders to map today’s Confirmed and Out For Delivery ezCater orders.',
+    loading: () => `Loading today’s In Progress ezCater orders for ${selectedRegionLabel()}…`,
+    info: (count, hours, cap) => `${count.toLocaleString()} In Progress ezCater orders · today · Confirmed + Out For Delivery · ${selectedRegionLabel()}${cap}`,
+    statusDetail: (count, hours, cap) => `${count.toLocaleString()} Confirmed / Out For Delivery orders for today in ${selectedRegionLabel()}${cap}`,
+    allowAssign: false,
+    usesWindow: false
+  },
+  scheduled: {
+    label: 'Scheduled',
+    empty: 'No Scheduled ezCater orders found in the next 24 hours.',
+    initial: 'Load Scheduled orders to map Scheduled ezCater orders in the next 24 hours.',
+    loading: () => `Loading Scheduled ezCater orders for ${selectedRegionLabel()}…`,
+    info: (count, hours, cap) => `${count.toLocaleString()} Scheduled ezCater orders · next 24h · ${selectedRegionLabel()}${cap}`,
+    statusDetail: (count, hours, cap) => `${count.toLocaleString()} Scheduled orders for ${selectedRegionLabel()} · next 24h${cap}`,
+    allowAssign: false,
+    usesWindow: false
+  },
+  completed: {
+    label: 'Completed',
+    empty: 'No Delivered ezCater orders found for today.',
+    initial: 'Load Completed orders to map today’s Delivered ezCater orders.',
+    loading: () => `Loading today’s Completed ezCater orders for ${selectedRegionLabel()}…`,
+    info: (count, hours, cap) => `${count.toLocaleString()} Completed ezCater orders · today · Delivered · ${selectedRegionLabel()}${cap}`,
+    statusDetail: (count, hours, cap) => `${count.toLocaleString()} Delivered orders for today in ${selectedRegionLabel()}${cap}`,
+    allowAssign: false,
+    usesWindow: false
+  }
+};
+function getOrderModeConfig() { return ORDER_MODE_CONFIG[currentOrderMode] || ORDER_MODE_CONFIG.unassigned; }
+function syncOrderModeUi() {
+  const cfg = getOrderModeConfig();
+  document.querySelectorAll('#orderModeTabs .order-mode-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.orderMode === currentOrderMode));
+  const row = document.getElementById('ordersWindowRow');
+  if (row) row.classList.toggle('hidden', !cfg.usesWindow);
+  if (!allOrders.length) {
+    const list = document.getElementById('ordersList');
+    if (list) list.innerHTML = `<div class="order-row" style="color: var(--muted); padding: 6px;">${escapeHtml(cfg.initial)}</div>`;
+  }
+  setOrdersInfoDetail(`${cfg.label} ezCater orders`);
+}
+function orderModeAllowsAssign() { return !!getOrderModeConfig().allowAssign; }
+
 function enterApp() {
   document.body.classList.add('app-mode');
   document.body.classList.remove('login-bg');
@@ -693,7 +744,6 @@ function enterApp() {
 
   if (!map) initMap();
   bindAppEvents();
-  clearOrders();
   loadDrivers();
   startAutoRefresh();
 }
@@ -1013,8 +1063,14 @@ function bindAppEvents() {
   document.getElementById('logoutBtn').addEventListener('click', logout);
   document.getElementById('loadOrdersBtn').addEventListener('click', loadOrders);
   document.getElementById('clearOrdersBtn').addEventListener('click', clearOrders);
-  document.querySelectorAll('#ordersModeTabs .orders-mode-btn').forEach(btn => {
-    btn.addEventListener('click', () => setOrdersMode(btn.dataset.orderMode || 'unassigned'));
+  document.querySelectorAll('#orderModeTabs .order-mode-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const nextMode = btn.dataset.orderMode || 'unassigned';
+      if (nextMode === currentOrderMode) return;
+      currentOrderMode = nextMode;
+      clearOrders();
+      syncOrderModeUi();
+    });
   });
   document.querySelectorAll('#regionButtons .region-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -1564,59 +1620,6 @@ function ingestMergedDriverPayloads(payloads, opts = {}) {
 }
 
 
-function orderModeConfig(mode = currentOrdersMode) {
-  if (mode === 'in-progress') return {
-    mode: 'in-progress',
-    label: 'In Progress',
-    loadLabel: 'In Progress Orders',
-    statuses: ['Scheduled', 'Confirmed', 'Out For Delivery'],
-    info: 'In Progress ezCater orders from today: Scheduled, Confirmed, and Out For Delivery.',
-    empty: 'No In Progress ezCater orders found for the current date.',
-    statusClass: 'inprogress',
-    assignEnabled: false,
-    feeEnabled: true
-  };
-  if (mode === 'completed') return {
-    mode: 'completed',
-    label: 'Completed',
-    loadLabel: 'Completed Orders',
-    statuses: ['Delivered'],
-    info: 'Completed ezCater orders from today: Delivered.',
-    empty: 'No Completed ezCater orders found for the current date.',
-    statusClass: 'completed',
-    assignEnabled: false,
-    feeEnabled: true
-  };
-  return {
-    mode: 'unassigned',
-    label: 'Unassigned',
-    loadLabel: 'Unassigned Orders',
-    statuses: ['New'],
-    info: 'Unassigned New ezCater orders use the selected 12/24 hour window. Scheduled orders are checked for driver conflicts.',
-    empty: 'No Unassigned New ezCater orders found for the selected window.',
-    statusClass: 'unassigned',
-    assignEnabled: true,
-    feeEnabled: true
-  };
-}
-
-function setOrdersMode(mode) {
-  const next = ['unassigned', 'in-progress', 'completed'].includes(mode) ? mode : 'unassigned';
-  if (currentOrdersMode === next) return;
-  currentOrdersMode = next;
-  document.querySelectorAll('#ordersModeTabs .orders-mode-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.orderMode === currentOrdersMode);
-  });
-  const windowControl = document.getElementById('ordersWindowControl');
-  if (windowControl) windowControl.classList.toggle('is-hidden', currentOrdersMode !== 'unassigned');
-  clearOrders();
-}
-
-function currentOrdersLoadLabel() {
-  return orderModeConfig().loadLabel;
-}
-
-
 function setOrdersStatus(msg, kind, detail) {
   const el = document.getElementById('ordersStatus');
   if (!el) return;
@@ -1642,7 +1645,7 @@ function setOrdersLoading(isLoading) {
   if (bar) bar.classList.toggle('show', !!isLoading);
   if (btn) {
     btn.classList.toggle('loading', !!isLoading);
-    btn.textContent = isLoading ? 'Loading…' : `Load ${currentOrdersLoadLabel()}`;
+    btn.textContent = isLoading ? 'Loading…' : 'Load Orders';
   }
 }
 
@@ -1676,10 +1679,8 @@ function hideOrderFromPanelUntilReload(orderId) {
   renderOrdersList();
   rebuildMarkers();
 
-  const cfg = orderModeConfig();
-  const hours = document.getElementById('ordersWindow')?.value || '12';
-  const modeWindow = cfg.mode === 'unassigned' ? ` · next ${hours}h` : ' · current date';
-  setOrdersInfoDetail(`${allOrders.length.toLocaleString()} ${cfg.label} ezCater orders${modeWindow} · ${selectedRegionLabel()}`);
+  const hours = currentOrderMode === 'scheduled' ? '24' : (document.getElementById('ordersWindow')?.value || '12');
+  setOrdersInfoDetail(getOrderModeConfig().info(allOrders.length, hours, '', scheduledOrders.length));
 
   return removed;
 }
@@ -1695,12 +1696,8 @@ function clearOrders() {
   if (orderLayer) orderLayer.clearLayers();
   if (routeLayer) routeLayer.clearLayers();
   if (currentJobLayer) currentJobLayer.clearLayers();
-  const cfg = orderModeConfig();
-  setOrdersInfoDetail(cfg.info);
-  const list = document.getElementById('ordersList');
-  if (list) list.innerHTML = `<div class="order-row" style="color: var(--muted); padding: 6px;">Load ${escapeHtml(cfg.loadLabel)} to map ${escapeHtml(cfg.label)} ezCater orders.</div>`;
-  const btn = document.getElementById('loadOrdersBtn');
-  if (btn) btn.textContent = `Load ${cfg.loadLabel}`;
+  setOrdersInfoDetail(`${getOrderModeConfig().label} ezCater orders`);
+  document.getElementById('ordersList').innerHTML = `<div class="order-row" style="color: var(--muted); padding: 6px;">${escapeHtml(getOrderModeConfig().initial)}</div>`;
   setOrdersStatus('', '');
 }
 
@@ -1841,18 +1838,14 @@ function updateFeePreview(orderId) {
 
 function renderOrdersList() {
   const list = document.getElementById('ordersList');
-  const cfg = orderModeConfig();
   if (!allOrders.length) {
-    list.innerHTML = `<div class="order-row" style="color: var(--muted); padding: 6px;">${escapeHtml(cfg.empty)}</div>`;
+    list.innerHTML = `<div class="order-row" style="color: var(--muted); padding: 6px;">${escapeHtml(getOrderModeConfig().empty)}</div>`;
     return;
   }
   allOrders = sortOrdersByStart(allOrders);
   list.innerHTML = allOrders.map((o, idx) => {
-    const canAssign = cfg.assignEnabled && o.jobId && o.orderId;
-    const canEditFee = cfg.feeEnabled && o.jobId;
-    const statusLabel = o.orderStatus || cfg.statuses?.[0] || cfg.label;
-    const driverLabel = o.driverName || o.carrierDriverName || (o.driverId ? `Driver #${o.driverId}` : 'No assigned driver shown');
-    const activeAssign = String(selectedAssignOrderId || '') === String(o.orderId);
+    const canAssign = orderModeAllowsAssign() && o.jobId && o.orderId;
+    const activeAssign = canAssign && String(selectedAssignOrderId || '') === String(o.orderId);
     const feeEditorOpen = String(openFeeOrderId || '') === String(o.orderId);
     const justUpdated = lastFeeUpdate && String(lastFeeUpdate.orderId || '') === String(o.orderId);
     const distanceLabel = fmtMiles(orderDistanceMiles(o));
@@ -1872,7 +1865,7 @@ function renderOrdersList() {
           </div>
           <div class="v1-head-right">
             <span class="v1-region">${escapeHtml(o.regionName || 'ezCater')}</span>
-            <span class="order-status-chip ${escapeHtml(cfg.statusClass)}">${escapeHtml(statusLabel)}</span>
+            ${o.orderStatus ? `<span class="order-status-chip">${escapeHtml(o.orderStatus)}</span>` : ''}
             <span class="v1-zone">${escapeHtml(o.zoneName || '—')}</span>
           </div>
         </div>
@@ -1894,7 +1887,7 @@ function renderOrdersList() {
           <div class="v1-money-cell ${justUpdated ? 'just-updated' : ''}"><div class="v1-money-label">Driver pay</div><div class="v1-money-value">${escapeHtml(currentDriverPayLabel)}</div></div>
           <div class="v1-money-cell with-action ${justUpdated ? 'just-updated' : ''}">
             <div class="v1-money-cell-left"><div class="v1-money-label">Other fee</div><div class="v1-money-value">${escapeHtml(currentOtherFeeLabel)}</div></div>
-            ${canEditFee ? `<button class="mini-btn btn-mini" data-action="open-fee" data-order-id="${escapeHtml(o.orderId)}">+$$</button>` : ''}
+            <button class="mini-btn btn-mini" data-action="open-fee" data-order-id="${escapeHtml(o.orderId)}" ${o.jobId ? '' : 'disabled'}>+$$</button>
           </div>
         </div>
 
@@ -1917,9 +1910,7 @@ function renderOrdersList() {
             <div class="v1-fee-status" id="fee-status-${escapeHtml(o.orderId)}"></div>
           </div>` : feeStatus}
 
-        ${!cfg.assignEnabled ? `
-          <div class="order-driver-line"><strong>Driver:</strong> ${escapeHtml(driverLabel)}${o.driverId ? ` · #${escapeHtml(o.driverId)}` : ''}</div>
-        ` : activeAssign ? `
+        ${activeAssign ? `
           <div class="v1-assign-banner"><i class="ti ti-target" aria-hidden="true"></i><span>Assign mode is on. Click an available Catering driver below, or pick one on the map. Drivers with a ±1 hour scheduled conflict are hidden.</span></div>
           <div class="v1-assign-box" id="assign-${escapeHtml(o.orderId)}">
             <label class="v1-assign-label" for="driver-${escapeHtml(o.orderId)}">Catering driver — closest first</label>
@@ -1927,8 +1918,8 @@ function renderOrdersList() {
             <div class="v1-driver-list">${orderCardDriverRows(o)}</div>
             <div class="v1-assign-foot"><button class="mini-btn" data-action="assign" data-order-id="${escapeHtml(o.orderId)}">Done assigning</button></div>
             <div class="v1-assign-status" id="assign-status-${escapeHtml(o.orderId)}"></div>
-          </div>` : `
-          <div class="v1-actions"><button class="mini-btn" data-action="assign" data-order-id="${escapeHtml(o.orderId)}" ${canAssign ? '' : 'disabled'}>Assign driver</button></div>`}
+          </div>` : (canAssign ? `
+          <div class="v1-actions"><button class="mini-btn" data-action="assign" data-order-id="${escapeHtml(o.orderId)}">Assign driver</button></div>` : '')}
 
         ${o.stepsError ? `<div class="order-row" style="color: var(--danger); margin-top: 8px;"><strong>Steps</strong> ${escapeHtml(o.stepsError)}</div>` : ''}
       </div>`;
@@ -2038,6 +2029,7 @@ function selectOrder(orderId, pan) {
 }
 
 function setAssignMode(orderId) {
+  if (!orderModeAllowsAssign()) orderId = null;
   selectedAssignOrderId = orderId ? String(orderId) : null;
   updateAssignBanner();
   rebuildMarkers();
@@ -2046,7 +2038,7 @@ function setAssignMode(orderId) {
 function updateAssignBanner() {
   const el = document.getElementById('assignBanner');
   if (!el) return;
-  if (!selectedAssignOrderId) {
+  if (!selectedAssignOrderId || !orderModeAllowsAssign()) {
     el.classList.remove('show');
     el.textContent = '';
     return;
@@ -2394,12 +2386,11 @@ async function loadOrders(opts = {}) {
     return;
   }
 
-  const cfg = orderModeConfig();
-  const hours = document.getElementById('ordersWindow').value || '12';
+  const cfg = getOrderModeConfig();
+  const hours = currentOrderMode === 'scheduled' ? '24' : (document.getElementById('ordersWindow').value || '12');
   const regionIds = getSelectedRegionIds();
   if (!opts.quiet) {
-    const windowText = cfg.mode === 'unassigned' ? `next ${hours} hours` : 'today';
-    setOrdersStatus(`Loading ${cfg.label} ezCater orders for ${selectedRegionLabel()} · ${windowText}…`, 'info');
+    setOrdersStatus(cfg.loading(), 'info');
     setOrdersLoading(true);
   }
   document.getElementById('loadOrdersBtn').disabled = true;
@@ -2407,42 +2398,28 @@ async function loadOrders(opts = {}) {
   try {
     const targets = regionIds.length ? regionIds : [''];
     const results = await Promise.all(targets.map(async regionId => {
-      const params = new URLSearchParams();
-      params.set('mode', cfg.mode);
-      if (cfg.mode === 'unassigned') params.set('hours', hours);
+      const params = new URLSearchParams({ mode: currentOrderMode, hours });
       if (regionId) params.set('regionId', regionId);
-      const r = await fetch('/api/orders?' + params.toString(), { headers: { 'X-Usertoken': Session.userToken, 'Accept': 'application/json' } });
+      const url = `/api/orders?${params.toString()}`;
+      const r = await fetch(url, { headers: { 'X-Usertoken': Session.userToken, 'Accept': 'application/json' } });
       const json = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(`${regionId ? regionNameFromId(regionId) + ': ' : ''}${json.error || 'Orders request failed (' + r.status + ')'}`);
       return json;
     }));
     const previousAssignOrderId = selectedAssignOrderId;
     allOrders = sortOrdersByStart(mergeByKey(results.flatMap(j => Array.isArray(j.orders) ? j.orders : []), o => String(o.orderId || o.jobId || JSON.stringify(o))));
-    scheduledOrders = cfg.mode === 'unassigned'
-      ? sortOrdersByStart(mergeByKey(results.flatMap(j => Array.isArray(j.scheduledOrders) ? j.scheduledOrders : []), o => String(o.orderId || o.jobId || JSON.stringify(o))))
-      : [];
-    if (!opts.preserveSelection) { selectedAssignOrderId = null; openFeeOrderId = null; lastFeeUpdate = null; }
-    else if (previousAssignOrderId && cfg.assignEnabled && allOrders.some(o => String(o.orderId) === String(previousAssignOrderId))) selectedAssignOrderId = previousAssignOrderId;
+    scheduledOrders = sortOrdersByStart(mergeByKey(results.flatMap(j => Array.isArray(j.scheduledOrders) ? j.scheduledOrders : []), o => String(o.orderId || o.jobId || JSON.stringify(o))));
+    if (!opts.preserveSelection || !cfg.allowAssign) { selectedAssignOrderId = null; openFeeOrderId = opts.preserveSelection ? openFeeOrderId : null; lastFeeUpdate = opts.preserveSelection ? lastFeeUpdate : null; }
+    else if (previousAssignOrderId && allOrders.some(o => String(o.orderId) === String(previousAssignOrderId))) selectedAssignOrderId = previousAssignOrderId;
     else selectedAssignOrderId = null;
-    if (openFeeOrderId && !allOrders.some(o => String(o.orderId) === String(openFeeOrderId))) openFeeOrderId = null;
-    if (lastFeeUpdate && !allOrders.some(o => String(o.orderId) === String(lastFeeUpdate.orderId || ''))) lastFeeUpdate = null;
     updateAssignBanner();
     mapOrders({ preserveView: !!opts.preserveView });
     renderOrdersList();
     rebuildMarkers();
-
     const windowEnds = results.map(j => j.windowEnd).filter(Boolean).sort();
     const capLabel = windowEnds.length ? ` · no later than ${fmtDateTime(windowEnds[0])}` : '';
-    const dayLabels = results.map(j => j.dateLabel).filter(Boolean);
-    const dayLabel = dayLabels.length ? ` · ${dayLabels[0]}` : ' · current date';
-    const modeWindow = cfg.mode === 'unassigned' ? ` · next ${hours}h${capLabel}` : dayLabel;
-    const scheduledLabel = cfg.mode === 'unassigned'
-      ? (scheduledOrders.length ? ` · ${scheduledOrders.length.toLocaleString()} scheduled drivers/orders checked` : ' · no scheduled conflicts found')
-      : '';
-    const orderInfoDetail = `${allOrders.length.toLocaleString()} ${cfg.label} ezCater orders${modeWindow} · ${selectedRegionLabel()}${scheduledLabel}`;
-    const statusDetail = cfg.mode === 'unassigned'
-      ? `${allOrders.length.toLocaleString()} New orders and ${scheduledOrders.length.toLocaleString()} Scheduled orders for ${selectedRegionLabel()}${capLabel}${scheduledLabel}`
-      : `${allOrders.length.toLocaleString()} ${cfg.label} orders for ${selectedRegionLabel()}${dayLabel} · statuses: ${cfg.statuses.join(', ')}`;
+    const orderInfoDetail = cfg.info(allOrders.length, hours, capLabel, scheduledOrders.length);
+    const statusDetail = cfg.statusDetail(allOrders.length, hours, capLabel, scheduledOrders.length);
     setOrdersInfoDetail(orderInfoDetail);
     if (!opts.quiet) setOrdersStatus(`${allOrders.length.toLocaleString()} ${allOrders.length === 1 ? 'Order' : 'Orders'} loaded`, 'success', statusDetail);
   } catch (err) {
