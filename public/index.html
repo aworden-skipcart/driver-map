@@ -93,10 +93,14 @@
   .version-text { font-size: 10px; color: var(--border2); margin-top: 6px; font-family: 'DM Mono', monospace; }
 
   #appScreen { display: none; height: 100vh; }
-  body.app-mode #appScreen { display: grid; grid-template-columns: 320px minmax(0, 1fr) 380px; }
+  body.app-mode #appScreen { display: grid; grid-template-columns: 320px minmax(0, 1fr) 380px; position: relative; }
+  body.app-mode.sidebar-collapsed #appScreen { grid-template-columns: 0 minmax(0, 1fr) 380px; }
+  body.app-mode.sidebar-collapsed #sidebar { transform: translateX(-100%); pointer-events: none; }
+  body.app-mode.sidebar-collapsed #sidebarToggle { left: 0; }
+  body.app-mode.sidebar-collapsed #sidebarToggle .collapse-icon::before { content: '>'; }
   body.app-mode #loginScreen { display: none; }
 
-  #sidebar { background: var(--panel); border-right: 1px solid var(--border2); overflow-y: auto; display: flex; flex-direction: column; }
+  #sidebar { background: var(--panel); border-right: 1px solid var(--border2); overflow-y: auto; display: flex; flex-direction: column; width: 320px; max-width: 320px; min-width: 320px; transition: transform .18s ease; z-index: 920; }
   .topbar { padding: 14px 18px; border-bottom: 1px solid var(--border2); display: flex; align-items: center; justify-content: space-between; background: linear-gradient(135deg, rgba(0,204,255,0.06), transparent); }
   .topbar-title { font-family: 'Barlow Condensed', sans-serif; font-size: 13px; font-weight: 800; letter-spacing: 0.2em; text-transform: uppercase; color: var(--cyan); }
   .topbar-logo { height: 28px; width: auto; max-width: 170px; display: block; object-fit: contain; filter: brightness(0) invert(1); opacity: .94; }
@@ -108,13 +112,19 @@
   .section { margin-bottom: 18px; padding-bottom: 18px; border-bottom: 1px solid var(--border); }
   .section:last-child { border-bottom: none; }
   .section-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.15em; color: var(--muted); margin-bottom: 10px; font-weight: 700; font-family: 'Barlow Condensed', sans-serif; }
+  #sidebarToggle { position: absolute; top: 50%; left: 320px; transform: translateY(-50%); z-index: 930; width: 24px; height: 54px; border: 1px solid var(--border2); border-left: none; border-radius: 0 10px 10px 0; background: rgba(8,15,36,.95); color: var(--cyan); cursor: pointer; display: grid; place-items: center; box-shadow: 7px 0 18px rgba(0,0,0,.28); transition: left .18s ease, background .15s, border-color .15s; }
+  #sidebarToggle:hover { background: rgba(12,21,48,.98); border-color: rgba(0,204,255,.42); }
+  #sidebarToggle .collapse-icon::before { content: '<'; font-family: 'Barlow Condensed', sans-serif; font-size: 18px; font-weight: 900; line-height: 1; }
 
   .app-label { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 5px; font-weight: 700; }
   .app-input, .app-select { width: 100%; height: 34px; padding: 0 10px; background: rgba(0,0,0,0.3); border: 1px solid var(--border2); border-radius: 6px; color: var(--text); font-size: 12px; font-family: 'Barlow', sans-serif; outline: none; transition: border-color .15s; }
   .app-input:focus, .app-select:focus { border-color: rgba(0,204,255,0.4); }
   .app-select { appearance: none; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='%234A7C94' d='M0 0l5 6 5-6z'/></svg>"); background-repeat: no-repeat; background-position: right 10px center; padding-right: 26px; }
-  .region-button-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
-  .region-btn { min-height: 32px; border: 1px solid var(--border2); border-radius: 8px; background: rgba(0,0,0,.25); color: var(--muted); font-family: 'Barlow Condensed', sans-serif; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; cursor: pointer; }
+  .region-controls { display: grid; grid-template-columns: minmax(0, 1fr) 92px; gap: 8px; align-items: stretch; }
+  .region-button-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+  .region-actions { display: grid; grid-template-rows: 1fr 1fr; gap: 6px; }
+  .region-actions .app-btn { height: 100%; min-height: 34px; margin-top: 0 !important; padding: 0 6px; letter-spacing: .08em; }
+  .region-btn { min-height: 30px; border: 1px solid var(--border2); border-radius: 8px; background: rgba(0,0,0,.25); color: var(--muted); font-family: 'Barlow Condensed', sans-serif; font-size: 14px; font-weight: 900; letter-spacing: .04em; text-transform: uppercase; cursor: pointer; }
   .region-btn.active { color: #03111a; background: var(--cyan); border-color: var(--cyan); box-shadow: 0 0 0 1px rgba(0,204,255,.12), 0 0 18px rgba(0,204,255,.18); }
   .region-btn:hover { border-color: rgba(0,204,255,.45); color: var(--white); }
   .region-btn.active:hover { color: #03111a; }
@@ -124,11 +134,13 @@
   .app-btn.secondary { background: transparent; border-color: var(--border2); color: var(--muted); }
   .app-btn.secondary:hover { color: var(--text); border-color: var(--cyan); background: transparent; }
 
-  .checkbox-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; font-size: 12px; cursor: pointer; user-select: none; }
-  .checkbox-row input { width: 14px; height: 14px; accent-color: var(--cyan); cursor: pointer; }
+  .filters-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: minmax(24px, auto); column-gap: 8px; row-gap: 5px; align-items: center; justify-items: start; }
+  .checkbox-row { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 11px; line-height: 1.15; cursor: pointer; user-select: none; text-align: left; }
+  .checkbox-row input { width: 14px; height: 14px; accent-color: var(--cyan); cursor: pointer; flex: none; }
+  .checkbox-row span { min-width: 0; }
 
-  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  .stat { background: var(--panel-2); border: 1px solid var(--border); padding: 10px; border-radius: 6px; }
+  .stats { display: grid; grid-template-columns: repeat(2, minmax(0, 112px)); gap: 8px; justify-content: center; }
+  .stat { background: var(--panel-2); border: 1px solid var(--border); padding: 8px 6px; border-radius: 6px; text-align: center; }
   .stat-value { font-size: 18px; font-weight: 700; color: var(--white); font-family: 'Barlow Condensed', sans-serif; }
   .stat-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-top: 2px; }
 
@@ -144,6 +156,9 @@
   .status-msg.success { background: rgba(74,222,128,0.1); color: var(--success); border: 1px solid rgba(74,222,128,0.2); display: block; }
   .status-msg.error { background: var(--danger-bg); color: var(--danger); border: 1px solid rgba(248,113,113,0.25); display: block; }
   .status-msg.info { background: var(--cyan-dim); color: var(--cyan); border: 1px solid rgba(0,204,255,0.2); display: block; }
+  .loading-bar { display: none; height: 5px; margin-top: 8px; border-radius: 999px; overflow: hidden; background: rgba(0,0,0,.30); border: 1px solid var(--border); }
+  .loading-bar.show { display: block; }
+  .loading-bar::before { content: ''; display: block; width: 42%; height: 100%; border-radius: inherit; background: linear-gradient(90deg, transparent, var(--cyan), transparent); animation: loadingSlide 1s ease-in-out infinite; }
 
   #mapShell { position: relative; min-width: 0; min-height: 0; background: var(--bg); overflow: hidden; }
   #map { position: absolute; inset: 0; width: 100%; height: 100%; background: var(--bg); }
@@ -183,8 +198,11 @@
 
   #ordersPanel { background: var(--panel); border-left: 1px solid var(--border2); overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
   .orders-header { padding: 14px 16px; border-bottom: 1px solid var(--border2); background: linear-gradient(135deg, rgba(0,204,255,0.06), transparent); }
+  .orders-title-row { display: flex; align-items: center; gap: 8px; }
   .orders-title { font-family: 'Barlow Condensed', sans-serif; font-size: 13px; font-weight: 800; letter-spacing: 0.2em; text-transform: uppercase; color: var(--cyan); }
-  .orders-sub { font-size: 10px; color: var(--muted); font-family: 'DM Mono', monospace; margin-top: 2px; }
+  .info-tip { width: 16px; height: 16px; border-radius: 999px; display: inline-grid; place-items: center; border: 1px solid rgba(0,204,255,.34); background: rgba(0,204,255,.10); color: var(--cyan); font: 700 10px 'DM Mono', monospace; cursor: help; flex: none; }
+  .orders-sub { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .status-inline { display: inline-flex; align-items: center; gap: 6px; }
   .orders-controls { padding: 12px 16px; border-bottom: 1px solid var(--border); }
   .orders-list { flex: 1; overflow-y: auto; padding: 12px; scrollbar-width: thin; scrollbar-color: rgba(0,204,255,.42) rgba(3,8,23,.55); }
   #sidebar { scrollbar-width: thin; scrollbar-color: rgba(0,204,255,.35) rgba(3,8,23,.55); }
@@ -275,7 +293,9 @@
 
   @media (max-width: 980px) {
     body.app-mode #appScreen { grid-template-columns: 300px 1fr; grid-template-rows: 1fr 310px; }
-    #sidebar { grid-row: 1 / span 2; }
+    body.app-mode.sidebar-collapsed #appScreen { grid-template-columns: 0 1fr; }
+    #sidebar { grid-row: 1 / span 2; width: 300px; max-width: 300px; min-width: 300px; }
+    #sidebarToggle { left: 300px; }
     #mapShell { grid-column: 2; grid-row: 1; }
     #ordersPanel { grid-column: 2; grid-row: 2; border-left: none; border-top: 1px solid var(--border2); }
     .weather-toggle { top: 10px; right: 10px; width: 40px; height: 40px; border-radius: 13px; }
@@ -298,6 +318,7 @@
   .marker-cluster-small, .marker-cluster-medium, .marker-cluster-large { background: rgba(0,204,255,0.2); }
   .marker-cluster-small div, .marker-cluster-medium div, .marker-cluster-large div { background: rgba(0,204,255,0.6); color: #020617; font-family: 'Barlow Condensed', sans-serif; font-weight: 800; }
 
+  @keyframes loadingSlide { from { transform: translateX(-120%); } to { transform: translateX(260%); } }
   @keyframes spin { to { transform: rotate(360deg); } }
   @keyframes fadeDown { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: translateY(0); } }
   @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
@@ -347,6 +368,7 @@
 </div>
 
 <div id="appScreen">
+  <button type="button" id="sidebarToggle" aria-label="Collapse driver panel" aria-expanded="true"><span class="collapse-icon" aria-hidden="true"></span></button>
   <aside id="sidebar">
     <div class="topbar">
       <div>
@@ -359,31 +381,37 @@
     <div class="sidebar-body">
       <div class="section">
         <div class="section-title">Regions</div>
-        <div class="region-button-grid" id="regionButtons" aria-label="Regions">
-          <button type="button" class="region-btn" data-region-id="54">Region 1</button>
-          <button type="button" class="region-btn" data-region-id="55">Region 2</button>
-          <button type="button" class="region-btn" data-region-id="56">Region 3</button>
-          <button type="button" class="region-btn" data-region-id="57">Region 4</button>
-          <button type="button" class="region-btn active" data-region-id="58">Region 5</button>
-          <button type="button" class="region-btn" data-region-id="59">Region 6</button>
-          <button type="button" class="region-btn" data-region-id="60">Region 7</button>
-          <button type="button" class="region-btn" data-region-id="61">Region 8</button>
-          <button type="button" class="region-btn" data-region-id="62">Region 9</button>
+        <div class="region-controls">
+          <div class="region-button-grid" id="regionButtons" aria-label="Regions">
+            <button type="button" class="region-btn" data-region-id="54" title="Region 1">1</button>
+            <button type="button" class="region-btn" data-region-id="55" title="Region 2">2</button>
+            <button type="button" class="region-btn" data-region-id="56" title="Region 3">3</button>
+            <button type="button" class="region-btn" data-region-id="57" title="Region 4">4</button>
+            <button type="button" class="region-btn active" data-region-id="58" title="Region 5">5</button>
+            <button type="button" class="region-btn" data-region-id="59" title="Region 6">6</button>
+            <button type="button" class="region-btn" data-region-id="60" title="Region 7">7</button>
+            <button type="button" class="region-btn" data-region-id="61" title="Region 8">8</button>
+            <button type="button" class="region-btn" data-region-id="62" title="Region 9">9</button>
+          </div>
+          <div class="region-actions">
+            <button class="app-btn" id="loadBtn">Load</button>
+            <button class="app-btn secondary" id="refreshBtn">Refresh</button>
+          </div>
         </div>
-        <button class="app-btn" id="loadBtn" style="margin-top: 8px;">Load Drivers</button>
-        <button class="app-btn secondary" id="refreshBtn" style="margin-top: 6px;">Refresh</button>
         <div class="status-msg" id="statusMsg"></div>
       </div>
 
       <div class="section">
         <div class="section-title">Filters</div>
-        <label class="checkbox-row"><input type="checkbox" id="filterOnline" checked> <span><span class="status-dot dot-online"></span>Online</span></label>
-        <label class="checkbox-row"><input type="checkbox" id="filterOnJob" checked> <span><span class="status-dot dot-on-job"></span>On Job</span></label>
-        <label class="checkbox-row"><input type="checkbox" id="filterOffline"> <span><span class="status-dot dot-offline"></span>Offline</span></label>
-        <label class="checkbox-row"><input type="checkbox" id="filterCatering" checked> <span>Catering cohort only</span></label>
-        <label class="checkbox-row"><input type="checkbox" id="filterScheduledConflicts" checked> <span>Hide scheduled conflicts during assign</span></label>
+        <div class="filters-grid">
+          <label class="checkbox-row"><input type="checkbox" id="filterOnline" checked> <span><span class="status-dot dot-online"></span>Online</span></label>
+          <label class="checkbox-row"><input type="checkbox" id="filterOnJob" checked> <span><span class="status-dot dot-on-job"></span>On Job</span></label>
+          <label class="checkbox-row"><input type="checkbox" id="filterOffline"> <span><span class="status-dot dot-offline"></span>Offline</span></label>
+          <label class="checkbox-row"><input type="checkbox" id="filterCatering" checked> <span>Catering cohort only</span></label>
+          <label class="checkbox-row"><input type="checkbox" id="filterScheduledConflicts" checked> <span>Hide Sched Conflicts</span></label>
+        </div>
 
-        <label class="app-label" for="searchBox" style="margin-top: 12px;">Search</label>
+        <label class="app-label" for="searchBox" style="margin-top: 12px;">Search Driver</label>
         <input id="searchBox" class="app-input" placeholder="ID, name, phone, zone..." />
 
         <label class="app-label" for="zoneFilter" style="margin-top: 8px;">Zone</label>
@@ -441,7 +469,10 @@
 
   <aside id="ordersPanel">
     <div class="orders-header">
-      <div class="orders-title">Orders</div>
+      <div class="orders-title-row">
+        <div class="orders-title">Orders</div>
+        <span class="info-tip" id="ordersInfo" title="New + scheduled ezCater coverage" aria-label="Order load details">i</span>
+      </div>
       <div class="orders-sub" id="ordersSub">New + scheduled ezCater coverage</div>
     </div>
     <div class="orders-controls">
@@ -452,6 +483,7 @@
       </select>
       <button class="app-btn" id="loadOrdersBtn">Load Orders</button>
       <button class="app-btn secondary" id="clearOrdersBtn" style="margin-top: 6px;">Clear Orders</button>
+      <div class="loading-bar" id="ordersLoadingBar" aria-hidden="true"></div>
       <div class="status-msg" id="ordersStatus"></div>
       <div class="assign-banner" id="assignBanner"></div>
     </div>
@@ -869,11 +901,25 @@ function setupWeatherControls() {
   setWeatherButtons('off');
 }
 
+function setupSidebarToggle() {
+  if (setupSidebarToggle._bound) return;
+  setupSidebarToggle._bound = true;
+  const btn = document.getElementById('sidebarToggle');
+  if (!btn) return;
+  btn.addEventListener('click', () => {
+    const collapsed = document.body.classList.toggle('sidebar-collapsed');
+    btn.setAttribute('aria-expanded', String(!collapsed));
+    btn.setAttribute('aria-label', collapsed ? 'Open driver panel' : 'Collapse driver panel');
+    setTimeout(() => { if (map && typeof map.invalidateSize === 'function') map.invalidateSize(); }, 220);
+  });
+}
+
 function bindAppEvents() {
   if (bindAppEvents._bound) return;
   bindAppEvents._bound = true;
 
   setupWeatherControls();
+  setupSidebarToggle();
   document.getElementById('loadBtn').addEventListener('click', loadDrivers);
   document.getElementById('refreshBtn').addEventListener('click', loadDrivers);
   document.getElementById('logoutBtn').addEventListener('click', logout);
@@ -1427,10 +1473,40 @@ function ingestMergedDriverPayloads(payloads, opts = {}) {
 }
 
 
-function setOrdersStatus(msg, kind) {
+function setOrdersStatus(msg, kind, detail) {
   const el = document.getElementById('ordersStatus');
-  el.textContent = msg;
+  if (!el) return;
+  if (!msg) {
+    el.textContent = '';
+    el.className = 'status-msg';
+    el.removeAttribute('title');
+    return;
+  }
   el.className = 'status-msg ' + (kind || '');
+  if (detail) {
+    el.innerHTML = `<span class="status-inline"><span>${escapeHtml(msg)}</span><span class="info-tip" title="${escapeHtml(detail)}" aria-label="More order load details">i</span></span>`;
+    el.title = detail;
+  } else {
+    el.textContent = msg;
+    el.removeAttribute('title');
+  }
+}
+
+function setOrdersLoading(isLoading) {
+  const bar = document.getElementById('ordersLoadingBar');
+  const btn = document.getElementById('loadOrdersBtn');
+  if (bar) bar.classList.toggle('show', !!isLoading);
+  if (btn) {
+    btn.classList.toggle('loading', !!isLoading);
+    btn.textContent = isLoading ? 'Loading…' : 'Load Orders';
+  }
+}
+
+function setOrdersInfoDetail(detail) {
+  const info = document.getElementById('ordersInfo');
+  const sub = document.getElementById('ordersSub');
+  if (info) info.title = detail || 'New + scheduled ezCater coverage';
+  if (sub) sub.textContent = detail || 'New + scheduled ezCater coverage';
 }
 
 function isDeliveryNotFoundOrNotNewMessage(message) {
@@ -1458,7 +1534,7 @@ function hideOrderFromPanelUntilReload(orderId) {
 
   const hours = document.getElementById('ordersWindow')?.value || '12';
   const sub = document.getElementById('ordersSub');
-  if (sub) sub.textContent = `${allOrders.length.toLocaleString()} New ezCater orders · next ${hours}h · ${selectedRegionLabel()}`;
+  setOrdersInfoDetail(`${allOrders.length.toLocaleString()} New ezCater orders · next ${hours}h · ${selectedRegionLabel()}`);
 
   return removed;
 }
@@ -1472,7 +1548,7 @@ function clearOrders() {
   if (orderLayer) orderLayer.clearLayers();
   if (routeLayer) routeLayer.clearLayers();
   if (currentJobLayer) currentJobLayer.clearLayers();
-  document.getElementById('ordersSub').textContent = 'New + scheduled ezCater coverage';
+  setOrdersInfoDetail('New + scheduled ezCater coverage');
   document.getElementById('ordersList').innerHTML = '<div class="order-row" style="color: var(--muted); padding: 6px;">Load orders to map New ezCater pickups and scheduled-driver conflicts.</div>';
   setOrdersStatus('', '');
 }
@@ -2040,7 +2116,10 @@ async function loadOrders(opts = {}) {
 
   const hours = document.getElementById('ordersWindow').value || '12';
   const regionIds = getSelectedRegionIds();
-  if (!opts.quiet) setOrdersStatus(`Loading New + Scheduled ezCater orders for ${selectedRegionLabel()}…`, 'info');
+  if (!opts.quiet) {
+    setOrdersStatus(`Loading New + Scheduled ezCater orders for ${selectedRegionLabel()}…`, 'info');
+    setOrdersLoading(true);
+  }
   document.getElementById('loadOrdersBtn').disabled = true;
 
   try {
@@ -2065,12 +2144,15 @@ async function loadOrders(opts = {}) {
     const windowEnds = results.map(j => j.windowEnd).filter(Boolean).sort();
     const capLabel = windowEnds.length ? ` · no later than ${fmtDateTime(windowEnds[0])}` : '';
     const scheduledLabel = scheduledOrders.length ? ` · ${scheduledOrders.length.toLocaleString()} scheduled drivers/orders checked` : ' · no scheduled conflicts found';
-    document.getElementById('ordersSub').textContent = `${allOrders.length.toLocaleString()} New ezCater orders · next ${hours}h · ${selectedRegionLabel()}${capLabel}`;
-    if (!opts.quiet) setOrdersStatus(`Loaded ${allOrders.length.toLocaleString()} New orders and ${scheduledOrders.length.toLocaleString()} Scheduled orders for ${selectedRegionLabel()}${capLabel}${scheduledLabel}`, 'success');
+    const orderInfoDetail = `${allOrders.length.toLocaleString()} New ezCater orders · next ${hours}h · ${selectedRegionLabel()}${capLabel}`;
+    const statusDetail = `${allOrders.length.toLocaleString()} New orders and ${scheduledOrders.length.toLocaleString()} Scheduled orders for ${selectedRegionLabel()}${capLabel}${scheduledLabel}`;
+    setOrdersInfoDetail(orderInfoDetail);
+    if (!opts.quiet) setOrdersStatus(`${allOrders.length.toLocaleString()} ${allOrders.length === 1 ? 'Order' : 'Orders'} loaded`, 'success', statusDetail);
   } catch (err) {
     console.error(err);
     if (!opts.quiet) setOrdersStatus('Error: ' + err.message, 'error');
   } finally {
+    if (!opts.quiet) setOrdersLoading(false);
     document.getElementById('loadOrdersBtn').disabled = false;
   }
 }
