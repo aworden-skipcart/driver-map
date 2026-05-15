@@ -1,8 +1,6 @@
 // /api/orders.js
 //
-// GET /api/orders?mode=unassigned&hours=12&regionId=58
-// GET /api/orders?mode=in-progress&regionId=58
-// GET /api/orders?mode=completed&regionId=58
+// GET /api/orders?hours=12&regionId=58
 // Required header: X-Usertoken: <JWT from /api/auth>
 //
 // Pulls ezCater New orders for assignment plus Scheduled ezCater orders for
@@ -34,8 +32,7 @@ export default async function handler(req, res) {
   }
 
   const modeRaw = String(req.query?.mode || 'unassigned').toLowerCase();
-  const mode = ['unassigned', 'in-progress', 'completed'].includes(modeRaw) ? modeRaw : 'unassigned';
-  const modeConfig = ORDER_MODE_CONFIG[mode] || ORDER_MODE_CONFIG.unassigned;
+  const mode = ['unassigned', 'in-progress', 'scheduled', 'completed'].includes(modeRaw) ? modeRaw : 'unassigned';
 
   const hoursRaw = Number(req.query?.hours || 12);
   const hours = [12, 24].includes(hoursRaw) ? hoursRaw : 12;
@@ -47,38 +44,51 @@ export default async function handler(req, res) {
   }
 
   const now = new Date();
-  const centralDay = getCentralDayRange(now);
-  const start = mode === 'unassigned' ? now : centralDay.start;
-  const end = mode === 'unassigned' ? new Date(now.getTime() + hours * 60 * 60 * 1000) : centralDay.end;
-  // Pull a small buffer beyond the visible order window so conflict detection can
-  // catch scheduled drivers up to 1 hour after the selected order's window end.
-  const scheduledEnd = new Date(end.getTime() + 2 * 60 * 60 * 1000);
-  const windowStartMs = start.getTime();
-  const windowEndMs = end.getTime();
-  const scheduledEndMs = scheduledEnd.getTime();
+  const rollingEnd = new Date(now.getTime() + hours * 60 * 60 * 1000);
+  const scheduled24End = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  const scheduledConflictEnd = new Date(rollingEnd.getTime() + 2 * 60 * 60 * 1000);
+  const today = getCentralTodayWindow(now);
   const pageSize = 75;
   const maxPages = 8; // hard cap safety; 600 rows per status before enrichment
 
   try {
     const requestedRegionName = REGION_NAMES[String(regionId)] || '';
 
-    const primaryRawSets = await Promise.all(modeConfig.primaryStatuses.map(statusName => (
-      fetchOrdersByStatus({ statusName, start, end, pageSize, maxPages, appToken: APPTOKEN, userToken })
-    )));
-    const primaryRaw = mergeByKey(
-      primaryRawSets.flat(),
-      row => String(row.OrderId || row.orderId || row.JobId || row.jobId || JSON.stringify(row).slice(0, 80))
-    );
-
+    let primaryStatuses = ['New'];
+    let primaryStart = now;
+    let primaryEnd = rollingEnd;
+    let filterMode = 'inside';
     let scheduledRaw = [];
-    if (mode === 'unassigned') {
-      scheduledRaw = await fetchOrdersByStatus({ statusName: 'Scheduled', start, end: scheduledEnd, pageSize, maxPages, appToken: APPTOKEN, userToken });
 
-      // Some Skipcart views expose scheduled rows even when orderstatus is blank
-      // but do not always honor a Scheduled status filter consistently. Fallback
-      // to an unfiltered status search and keep only scheduled rows by response data.
+    if (mode === 'in-progress') {
+      primaryStatuses = ['Confirmed', 'Out For Delivery'];
+      primaryStart = today.start;
+      primaryEnd = today.end;
+      filterMode = 'overlap';
+    } else if (mode === 'scheduled') {
+      primaryStatuses = ['Scheduled'];
+      primaryStart = now;
+      primaryEnd = scheduled24End;
+      filterMode = 'overlap';
+    } else if (mode === 'completed') {
+      primaryStatuses = ['Delivered'];
+      primaryStart = today.start;
+      primaryEnd = today.end;
+      filterMode = 'overlap';
+    }
+
+    let primaryRaw = await fetchOrdersForStatuses({ statuses: primaryStatuses, start: primaryStart, end: primaryEnd, pageSize, maxPages, appToken: APPTOKEN, userToken });
+
+    // Scheduled can be inconsistent upstream, so keep the fallback specifically for Scheduled views / conflict checks.
+    if (primaryStatuses.length === 1 && primaryStatuses[0] === 'Scheduled' && !primaryRaw.length) {
+      const unfiltered = await fetchOrdersByStatus({ statusName: null, start: primaryStart, end: primaryEnd, pageSize, maxPages, appToken: APPTOKEN, userToken });
+      primaryRaw = unfiltered.filter(o => /scheduled/i.test(String(o.OrderStatus || o.orderStatus || '')));
+    }
+
+    if (mode === 'unassigned') {
+      scheduledRaw = await fetchOrdersByStatus({ statusName: 'Scheduled', start: now, end: scheduledConflictEnd, pageSize, maxPages, appToken: APPTOKEN, userToken });
       if (!scheduledRaw.length) {
-        const unfiltered = await fetchOrdersByStatus({ statusName: null, start, end: scheduledEnd, pageSize, maxPages, appToken: APPTOKEN, userToken });
+        const unfiltered = await fetchOrdersByStatus({ statusName: null, start: now, end: scheduledConflictEnd, pageSize, maxPages, appToken: APPTOKEN, userToken });
         scheduledRaw = unfiltered.filter(o => /scheduled/i.test(String(o.OrderStatus || o.orderStatus || '')));
       }
     }
@@ -90,33 +100,40 @@ export default async function handler(req, res) {
       ? scheduledRaw.filter(o => String(o.RegionName || '').toLowerCase() === requestedRegionName.toLowerCase())
       : scheduledRaw;
 
-    const primaryWindowFiltered = primaryRegionFiltered.filter(order => isOrderStartInsideWindow(order, windowStartMs, windowEndMs));
-    const scheduledWindowFiltered = mode === 'unassigned'
-      ? scheduledRegionFiltered.filter(order => orderOverlapsWindow(order, windowStartMs, scheduledEndMs))
-      : [];
+    const startMs = primaryStart.getTime();
+    const endMs = primaryEnd.getTime();
+    const scheduledStartMs = now.getTime();
+    const scheduledEndMs = scheduledConflictEnd.getTime();
+
+    const primaryWindowFiltered = primaryRegionFiltered.filter(order => {
+      return filterMode === 'inside'
+        ? isOrderStartInsideWindow(order, startMs, endMs)
+        : orderOverlapsWindow(order, startMs, endMs);
+    });
+    const scheduledWindowFiltered = scheduledRegionFiltered.filter(order => orderOverlapsWindow(order, scheduledStartMs, scheduledEndMs));
 
     const [primaryEnriched, scheduledEnriched] = await Promise.all([
       enrichOrders(primaryWindowFiltered, APPTOKEN, userToken),
       enrichOrders(scheduledWindowFiltered, APPTOKEN, userToken)
     ]);
 
+    const responseWindowEnd = mode === 'scheduled' ? scheduled24End : (mode === 'unassigned' ? rollingEnd : today.end);
+
     res.setHeader('Cache-Control', 'no-store');
     return res.status(200).json({
       status: true,
       mode,
-      modeLabel: modeConfig.label,
-      statuses: modeConfig.primaryStatuses,
-      hours: mode === 'unassigned' ? hours : null,
-      dateLabel: mode === 'unassigned' ? null : centralDay.label,
+      hours: mode === 'scheduled' ? 24 : hours,
+      primaryStatuses,
       totalFound: primaryRaw.length,
       scheduledTotalFound: scheduledRaw.length,
       totalAfterRegionFilter: primaryRegionFiltered.length,
       scheduledAfterRegionFilter: scheduledRegionFiltered.length,
       totalInsideWindow: primaryWindowFiltered.length,
       scheduledInsideWindow: scheduledWindowFiltered.length,
-      windowStart: start.toISOString(),
-      windowEnd: end.toISOString(),
-      scheduledWindowEnd: mode === 'unassigned' ? scheduledEnd.toISOString() : null,
+      windowStart: primaryStart.toISOString(),
+      windowEnd: responseWindowEnd.toISOString(),
+      scheduledWindowEnd: scheduledConflictEnd.toISOString(),
       orders: primaryEnriched,
       scheduledOrders: scheduledEnriched
     });
@@ -126,75 +143,55 @@ export default async function handler(req, res) {
   }
 }
 
-
-const ORDER_MODE_CONFIG = {
-  unassigned: { label: 'Unassigned', primaryStatuses: ['New'] },
-  'in-progress': { label: 'In Progress', primaryStatuses: ['Scheduled', 'Confirmed', 'Out For Delivery'] },
-  completed: { label: 'Completed', primaryStatuses: ['Delivered'] }
-};
-
-function mergeByKey(items, keyFn) {
-  const map = new Map();
-  for (const item of items || []) {
-    const key = keyFn(item);
-    if (!key) continue;
-    map.set(key, item);
+async function fetchOrdersForStatuses({ statuses, start, end, pageSize, maxPages, appToken, userToken }) {
+  const batches = await Promise.all(statuses.map(statusName => fetchOrdersByStatus({ statusName, start, end, pageSize, maxPages, appToken, userToken })));
+  const seen = new Set();
+  const merged = [];
+  for (const row of batches.flat()) {
+    const key = String(row.OrderId || row.orderId || row.JobId || row.jobId || JSON.stringify(row).slice(0, 80));
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(row);
   }
-  return [...map.values()];
+  return merged;
 }
 
-function getCentralDayRange(now = new Date()) {
-  const timeZone = 'America/Chicago';
-  const parts = getTimeZoneParts(now, timeZone);
-  const start = zonedTimeToUtc(timeZone, parts.year, parts.month, parts.day, 0, 0, 0);
-  const end = zonedTimeToUtc(timeZone, parts.year, parts.month, parts.day + 1, 0, 0, 0);
-  const label = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    timeZoneName: 'short'
-  }).format(now);
-  return { start, end, label };
-}
-
-function getTimeZoneParts(date, timeZone) {
+function getCentralTodayWindow(now = new Date()) {
+  const tz = 'America/Chicago';
   const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone,
+    timeZone: tz,
     year: 'numeric',
     month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false
-  }).formatToParts(date).reduce((acc, part) => {
-    if (part.type !== 'literal') acc[part.type] = part.value;
+    day: '2-digit'
+  }).formatToParts(now).reduce((acc, part) => {
+    if (part.type !== 'literal') acc[part.type] = Number(part.value);
     return acc;
   }, {});
   return {
-    year: Number(parts.year),
-    month: Number(parts.month),
-    day: Number(parts.day),
-    hour: Number(parts.hour === '24' ? 0 : parts.hour),
-    minute: Number(parts.minute),
-    second: Number(parts.second)
+    start: new Date(zonedTimeToUtcMs(parts.year, parts.month, parts.day, 0, 0, 0, tz)),
+    end: new Date(zonedTimeToUtcMs(parts.year, parts.month, parts.day + 1, 0, 0, 0, tz))
   };
 }
 
-function getTimeZoneOffsetMs(timeZone, date) {
-  const parts = getTimeZoneParts(date, timeZone);
-  const asUtc = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
-  return asUtc - date.getTime();
+function zonedTimeToUtcMs(year, month, day, hour, minute, second, timeZone) {
+  const utcGuess = Date.UTC(year, month - 1, day, hour, minute, second);
+  const offset = getTimeZoneOffsetMs(new Date(utcGuess), timeZone);
+  return utcGuess - offset;
 }
 
-function zonedTimeToUtc(timeZone, year, month, day, hour, minute, second) {
-  let utc = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
-  let offset = getTimeZoneOffsetMs(timeZone, utc);
-  utc = new Date(Date.UTC(year, month - 1, day, hour, minute, second) - offset);
-  offset = getTimeZoneOffsetMs(timeZone, utc);
-  return new Date(Date.UTC(year, month - 1, day, hour, minute, second) - offset);
+function getTimeZoneOffsetMs(date, timeZone) {
+  const zoneName = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    timeZoneName: 'shortOffset'
+  }).formatToParts(date).find(part => part.type === 'timeZoneName')?.value || 'GMT';
+  const match = zoneName.match(/^GMT([+-])(\d{1,2})(?::?(\d{2}))?$/i);
+  if (!match) return 0;
+  const sign = match[1] === '-' ? -1 : 1;
+  const hours = Number(match[2] || 0);
+  const minutes = Number(match[3] || 0);
+  return sign * ((hours * 60 + minutes) * 60 * 1000);
 }
+
 
 async function fetchOrdersByStatus({ statusName, start, end, pageSize, maxPages, appToken, userToken }) {
   const baseFilters = {
