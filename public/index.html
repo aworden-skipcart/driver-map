@@ -244,10 +244,27 @@
   .oc-link { color: var(--cyan); text-decoration: none; border-bottom: 1px solid rgba(0,204,255,.35); }
   .oc-link:hover { color: var(--white); border-bottom-color: rgba(255,255,255,.65); }
 
-  .v1-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
+  .v1-head {
+    position: relative;
+    display: block;
+    margin-bottom: 12px;
+    min-height: 44px;
+    padding-right: 142px;
+  }
+  .v1-head > div:first-child { min-width: 0; }
   .v1-brand { color: var(--white); font-size: 15px; font-weight: 800; line-height: 1.15; margin: 0 0 3px; }
-  .v1-meta { font-size: 10px; color: var(--muted); font-family: 'DM Mono', monospace; line-height: 1.35; }
-  .v1-head-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: none; }
+  .v1-meta { font-size: 10px; color: var(--muted); font-family: 'DM Mono', monospace; line-height: 1.35; overflow-wrap: anywhere; }
+  .v1-head-right {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 132px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+    pointer-events: auto;
+  }
   .v1-region { font-size: 10px; padding: 3px 9px; border-radius: 999px; background: rgba(0,204,255,.12); color: var(--cyan); border: 1px solid rgba(0,204,255,.25); white-space: nowrap; font-family: 'DM Mono', monospace; }
   .v1-zone { font-size: 10px; color: var(--muted); font-family: 'DM Mono', monospace; white-space: nowrap; max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
 
