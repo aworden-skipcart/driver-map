@@ -429,6 +429,93 @@ async function upstreamJson(url, init) {
   return json;
 }
 
+
+function firstNonEmpty(...values) {
+  for (const value of values) {
+    if (value === null || value === undefined) continue;
+    const text = String(value).trim();
+    if (text) return value;
+  }
+  return null;
+}
+
+function findFirstKeyValue(root, keyPattern) {
+  const seen = new Set();
+  const stack = [root];
+  while (stack.length) {
+    const item = stack.shift();
+    if (!item || typeof item !== 'object' || seen.has(item)) continue;
+    seen.add(item);
+    if (Array.isArray(item)) {
+      for (const child of item) stack.push(child);
+      continue;
+    }
+    for (const [key, value] of Object.entries(item)) {
+      if (keyPattern.test(key) && value !== null && value !== undefined && String(value).trim()) return value;
+      if (value && typeof value === 'object') stack.push(value);
+    }
+  }
+  return null;
+}
+
+function getAssignedDriverId(order, firstCarrier, firstCarrierDriver, jobDetails) {
+  return firstNonEmpty(
+    order.DriverId,
+    order.DriverID,
+    order.driverId,
+    order.driverID,
+    order.AssignedDriverId,
+    order.AssignedDriverID,
+    order.assignedDriverId,
+    order.CarrierDriverId,
+    order.CarrierDriverID,
+    order.carrierDriverId,
+    firstCarrier?.DriverId,
+    firstCarrier?.DriverID,
+    firstCarrier?.driverId,
+    firstCarrier?.CarrierDriverId,
+    firstCarrier?.CarrierDriverID,
+    firstCarrierDriver?.DriverId,
+    firstCarrierDriver?.DriverID,
+    firstCarrierDriver?.driverId,
+    firstCarrierDriver?.Id,
+    firstCarrierDriver?.id,
+    jobDetails?.DriverId,
+    jobDetails?.DriverID,
+    jobDetails?.driverId,
+    jobDetails?.driver?.DriverId,
+    jobDetails?.driver?.id,
+    findFirstKeyValue(order, /^(assigned)?driver(id|ID)$/i),
+    findFirstKeyValue(firstCarrier, /^(carrier)?driver(id|ID)$/i),
+    findFirstKeyValue(jobDetails, /^(assigned)?driver(id|ID)$/i)
+  );
+}
+
+function getAssignedDriverName(order, firstCarrier, firstCarrierDriver, jobDetails) {
+  const builtName = [firstCarrierDriver?.FirstName || firstCarrierDriver?.firstName, firstCarrierDriver?.LastName || firstCarrierDriver?.lastName].filter(Boolean).join(' ');
+  return firstNonEmpty(
+    firstCarrier?.CarrierDriverName,
+    firstCarrier?.carrierDriverName,
+    firstCarrier?.DriverName,
+    firstCarrierDriver?.DriverName,
+    firstCarrierDriver?.driverName,
+    firstCarrierDriver?.Name,
+    builtName,
+    order.DriverName,
+    order.driverName,
+    order.AssignedDriverName,
+    order.assignedDriverName,
+    order.CarrierDriverName,
+    order.carrierDriverName,
+    jobDetails?.DriverName,
+    jobDetails?.driverName,
+    jobDetails?.driver?.name,
+    findFirstKeyValue(order, /^(assigned)?driver(name|Name)$/i),
+    findFirstKeyValue(firstCarrier, /^(carrier)?driver(name|Name)$/i),
+    findFirstKeyValue(jobDetails, /^(assigned)?driver(name|Name)$/i)
+  ) || '';
+}
+
 function normalizeOrder(order, stepsResult, jobDetailsResult, paymentResult, enrichError) {
   const stops = Array.isArray(stepsResult?.stops) ? stepsResult.stops : [];
   const pickup = stops.find(s => (s.tasks || []).some(t => String(t.task_type || '').toLowerCase() === 'pickup')) || null;
@@ -438,8 +525,8 @@ function normalizeOrder(order, stepsResult, jobDetailsResult, paymentResult, enr
   const carrierDetails = Array.isArray(order.CarriersOrdersDetails) ? order.CarriersOrdersDetails : [];
   const firstCarrier = carrierDetails[0] || null;
   const firstCarrierDriver = Array.isArray(firstCarrier?.Drivers) ? firstCarrier.Drivers[0] : null;
-  const assignedDriverId = order.DriverId || order.driverId || firstCarrier?.DriverId || firstCarrier?.driverId || null;
   const jobDetails = Array.isArray(jobDetailsResult?.JobData) ? jobDetailsResult.JobData[0] : null;
+  const assignedDriverId = getAssignedDriverId(order, firstCarrier, firstCarrierDriver, jobDetails);
   const jobOrders = Array.isArray(jobDetails?.orders) ? jobDetails.orders : [];
   const matchedJobOrder = jobOrders.find(jo => String(jo.id || jo.orderid || jo.OrderId || '') === String(order.OrderId || order.orderId || '')) || jobOrders[0] || null;
   const orderCost = sumMoney(jobOrders.map(jo => jo?.cost_of_goods ?? jo?.CostOfGoods ?? jo?.CostOfGood));
@@ -449,11 +536,7 @@ function normalizeOrder(order, stepsResult, jobDetailsResult, paymentResult, enr
   const dropoffLat = dropoff ? Number(dropoff.latitude) : NaN;
   const dropoffLng = dropoff ? Number(dropoff.longitude) : NaN;
   const distanceMiles = distanceMilesBetween(pickupLat, pickupLng, dropoffLat, dropoffLng);
-  const assignedDriverName = firstCarrier?.CarrierDriverName
-    || [firstCarrierDriver?.FirstName, firstCarrierDriver?.LastName].filter(Boolean).join(' ')
-    || order.DriverName
-    || order.driverName
-    || '';
+  const assignedDriverName = getAssignedDriverName(order, firstCarrier, firstCarrierDriver, jobDetails);
 
   return {
     orderId: order.OrderId || order.orderId || pickupTask?.order_id || dropoffTask?.order_id || null,
