@@ -235,6 +235,12 @@
   .order-card:hover { background: linear-gradient(180deg, rgba(14,26,58,.98), rgba(9,17,40,.98)); }
   .order-card.active::before { opacity: 1; }
 
+  .order-driver-line { margin-top: 10px; padding: 8px 10px; border-radius: 9px; background: rgba(0,0,0,.16); border: 1px solid rgba(148,163,184,.12); color: var(--muted); font-size: 10px; line-height: 1.35; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .order-driver-line strong { color: var(--text); font-weight: 800; }
+  .order-driver-line .driver-id-link { color: var(--cyan); text-decoration: none; border-bottom: 1px solid rgba(0,204,255,.35); font-family: 'DM Mono', monospace; }
+  .order-driver-line .driver-id-link:hover { color: var(--white); border-bottom-color: rgba(255,255,255,.65); }
+  .order-driver-empty { color: rgba(148,163,184,.72); font-style: italic; }
+
   .oc-link { color: var(--cyan); text-decoration: none; border-bottom: 1px solid rgba(0,204,255,.35); }
   .oc-link:hover { color: var(--white); border-bottom-color: rgba(255,255,255,.65); }
 
@@ -1855,6 +1861,12 @@ function renderOrdersList() {
     const currentDriverPayLabel = fmtMoney(currentDriverPay, o.driverTotalPayCurrency);
     const pickupName = o.pickup?.entityName || o.pickup?.address || 'No pickup GPS found';
     const dropName = o.dropoff?.customerName || o.dropoff?.address || 'No dropoff GPS found';
+    const assignedDriverName = o.driverName || o.carrierDriverName || '';
+    const assignedDriverId = o.driverId || o.DriverId || '';
+    const assignedDriverLabel = assignedDriverName || (assignedDriverId ? 'Assigned driver' : 'No assigned driver returned');
+    const assignedDriverLine = assignedDriverId
+      ? `<div class="order-driver-line"><span><strong>Assigned Driver:</strong> ${escapeHtml(assignedDriverLabel)}</span><a class="driver-id-link" href="${driverProfileUrl(assignedDriverId)}" target="_blank" rel="noopener noreferrer">#${escapeHtml(assignedDriverId)}</a></div>`
+      : `<div class="order-driver-line"><span><strong>Assigned Driver:</strong> <span class="order-driver-empty">${escapeHtml(assignedDriverLabel)}</span></span></div>`;
     const feeStatus = justUpdated ? `<div class="v1-fee-status success"><i class="ti ti-circle-check" aria-hidden="true"></i><span>${escapeHtml(lastFeeUpdate.message || '')}</span></div>` : '';
     return `
       <div class="order-card ${activeAssign ? 'active' : ''}" data-order-id="${escapeHtml(o.orderId)}">
@@ -1890,6 +1902,8 @@ function renderOrdersList() {
             <button class="mini-btn btn-mini" data-action="open-fee" data-order-id="${escapeHtml(o.orderId)}" ${o.jobId ? '' : 'disabled'}>+$$</button>
           </div>
         </div>
+
+        ${assignedDriverLine}
 
         ${feeEditorOpen ? `
           <div class="v1-fee-editor">
