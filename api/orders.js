@@ -37,7 +37,7 @@ export default async function handler(req, res) {
   }
 
   const modeRaw = String(req.query?.mode || 'unassigned').toLowerCase();
-  const mode = ['unassigned', 'in-progress', 'scheduled', 'completed', 'all'].includes(modeRaw) ? modeRaw : 'unassigned';
+  const mode = ['unassigned', 'in-progress', 'scheduled', 'completed'].includes(modeRaw) ? modeRaw : 'unassigned';
 
   const hoursRaw = Number(req.query?.hours || 12);
   const hours = [12, 24].includes(hoursRaw) ? hoursRaw : 12;
@@ -81,59 +81,6 @@ export default async function handler(req, res) {
         windowEnd: searchEnd.toISOString(),
         orders: enriched,
         scheduledOrders: []
-      });
-    }
-
-    if (mode === 'all') {
-      const inProgressStatuses = ['Confirmed', 'Out For Delivery', 'out_for_delivery', 'Out for Delivery'];
-      const allStatuses = ['New', 'Scheduled', ...inProgressStatuses, 'Delivered'];
-
-      const [newRaw, scheduledRawBase, inProgressRaw, completedRaw, statsRawBase] = await Promise.all([
-        fetchOrdersByStatus({ statusName: 'New', start: now, end: rollingEnd, pageSize, maxPages, appToken: APPTOKEN, userToken }),
-        fetchOrdersByStatus({ statusName: 'Scheduled', start: now, end: scheduled24End, pageSize, maxPages, appToken: APPTOKEN, userToken }),
-        fetchOrdersForStatuses({ statuses: inProgressStatuses, start: today.start, end: today.end, pageSize, maxPages, appToken: APPTOKEN, userToken }),
-        fetchOrdersByStatus({ statusName: 'Delivered', start: today.start, end: today.end, pageSize, maxPages, appToken: APPTOKEN, userToken }),
-        fetchOrdersForStatuses({ statuses: allStatuses, start: today.start, end: today.end, pageSize, maxPages, appToken: APPTOKEN, userToken })
-      ]);
-
-      let scheduledRaw = scheduledRawBase;
-      if (!scheduledRaw.length) {
-        const unfilteredScheduled = await fetchOrdersByStatus({ statusName: null, start: now, end: scheduled24End, pageSize, maxPages, appToken: APPTOKEN, userToken });
-        scheduledRaw = unfilteredScheduled.filter(o => /scheduled/i.test(String(o.OrderStatus || o.orderStatus || '')));
-      }
-
-      const byRegion = rows => requestedRegionName
-        ? rows.filter(o => String(o.RegionName || '').toLowerCase() === requestedRegionName.toLowerCase())
-        : rows;
-
-      const newFiltered = byRegion(newRaw).filter(order => isOrderStartInsideWindow(order, now.getTime(), rollingEnd.getTime()));
-      const scheduledFiltered = byRegion(scheduledRaw).filter(order => orderOverlapsWindow(order, now.getTime(), scheduled24End.getTime()));
-      const inProgressFiltered = byRegion(inProgressRaw).filter(order => orderOverlapsWindow(order, today.start.getTime(), today.end.getTime()));
-      const completedFiltered = byRegion(completedRaw).filter(order => orderOverlapsWindow(order, today.start.getTime(), today.end.getTime()));
-      const statsFiltered = byRegion(statsRawBase).filter(order => orderOverlapsWindow(order, today.start.getTime(), today.end.getTime()));
-
-      const renderRaw = dedupeOrders([...newFiltered, ...scheduledFiltered, ...inProgressFiltered, ...completedFiltered]);
-
-      const [ordersEnriched, statsEnriched] = await Promise.all([
-        enrichOrders(renderRaw, APPTOKEN, userToken),
-        enrichOrders(dedupeOrders(statsFiltered), APPTOKEN, userToken)
-      ]);
-
-      res.setHeader('Cache-Control', 'no-store');
-      return res.status(200).json({
-        status: true,
-        mode: 'all',
-        hours,
-        primaryStatuses: allStatuses,
-        windowStart: now.toISOString(),
-        windowEnd: rollingEnd.toISOString(),
-        scheduledWindowEnd: scheduled24End.toISOString(),
-        todayStart: today.start.toISOString(),
-        todayEnd: today.end.toISOString(),
-        totalInsideWindow: ordersEnriched.length,
-        orders: ordersEnriched,
-        scheduledOrders: scheduledFiltered.length ? await enrichOrders(scheduledFiltered, APPTOKEN, userToken) : [],
-        statsOrders: statsEnriched
       });
     }
 
@@ -224,18 +171,6 @@ export default async function handler(req, res) {
     console.error('[orders] proxy error:', err);
     return res.status(err.status || 502).json({ error: err.message || 'Could not reach orders API', upstream: err.upstream || null });
   }
-}
-
-function dedupeOrders(rows) {
-  const seen = new Set();
-  const merged = [];
-  for (const row of rows || []) {
-    const key = String(row.OrderId || row.orderId || row.JobId || row.jobId || JSON.stringify(row).slice(0, 80));
-    if (seen.has(key)) continue;
-    seen.add(key);
-    merged.push(row);
-  }
-  return merged;
 }
 
 async function fetchOrdersForStatuses({ statuses, start, end, pageSize, maxPages, appToken, userToken }) {
