@@ -320,6 +320,75 @@
   .circle-offer-help { margin-top: 7px; padding: 7px 9px; border-radius: 9px; background: rgba(0,204,255,.08); border: 1px dashed rgba(0,204,255,.25); color: var(--cyan); font-size: 10px; line-height: 1.35; display: none; }
   .circle-offer-help.show { display: block; }
   body.circle-offer-active #map { cursor: crosshair; }
+  .circle-offer-modal {
+    position: absolute;
+    left: 50%;
+    top: 22px;
+    transform: translateX(-50%);
+    z-index: 1200;
+    width: min(390px, calc(100% - 28px));
+    background: rgba(8,15,36,.96);
+    border: 1px solid rgba(0,204,255,.34);
+    border-radius: 16px;
+    box-shadow: 0 22px 54px rgba(0,0,0,.46), 0 0 0 1px rgba(0,204,255,.08) inset;
+    backdrop-filter: blur(10px);
+    overflow: hidden;
+  }
+  .circle-offer-modal-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 13px 14px 10px;
+    background: linear-gradient(135deg, rgba(0,204,255,.12), transparent);
+    border-bottom: 1px solid rgba(26,48,80,.9);
+  }
+  .circle-offer-modal-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 11px;
+    display: grid;
+    place-items: center;
+    flex: none;
+    color: var(--cyan);
+    background: rgba(0,204,255,.10);
+    border: 1px solid rgba(0,204,255,.22);
+    font-size: 16px;
+  }
+  .circle-offer-modal-title {
+    color: var(--white);
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 14px;
+    font-weight: 900;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    line-height: 1.15;
+  }
+  .circle-offer-modal-sub {
+    margin-top: 3px;
+    color: var(--muted);
+    font: 10px 'DM Mono', monospace;
+    line-height: 1.35;
+  }
+  .circle-offer-modal-body { padding: 12px 14px 14px; }
+  .circle-offer-modal-copy { color: var(--text); font-size: 12px; line-height: 1.45; }
+  .circle-offer-modal-stats {
+    margin-top: 10px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 7px;
+  }
+  .circle-offer-stat {
+    padding: 8px 7px;
+    border-radius: 10px;
+    background: rgba(0,0,0,.22);
+    border: 1px solid rgba(148,163,184,.13);
+    text-align: center;
+    min-width: 0;
+  }
+  .circle-offer-stat-value { color: var(--white); font: 800 15px 'DM Mono', monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .circle-offer-stat-label { margin-top: 2px; color: var(--muted); font-size: 8px; font-weight: 800; letter-spacing: .10em; text-transform: uppercase; }
+  .circle-offer-modal-actions { margin-top: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .circle-offer-modal-actions .mini-btn { min-height: 34px; }
 
   .v1-driver-list { margin-top: 9px; display: grid; gap: 6px; max-height: 240px; overflow-y: auto; padding-right: 2px; }
   .v1-driver-row { display: grid; grid-template-columns: 26px 1fr auto auto; gap: 8px; align-items: center; padding: 8px 9px; background: rgba(0,0,0,.18); border: 1px solid rgba(148,163,184,.14); border-radius: 9px; cursor: pointer; transition: border-color .12s, background .12s; }
@@ -525,7 +594,7 @@
     </div>
     <div class="card-footer">
       <button type="button" class="trouble-btn">Trouble logging in?</button>
-      <div class="version-text">driver-map v2026.05.18.1</div>
+      <div class="version-text">driver-map v2026.05.18.3</div>
     </div>
   </div>
 </div>
@@ -682,7 +751,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script>
-const APP_VERSION = '2026.05.18.2';
+const APP_VERSION = '2026.05.18.3';
 window.APP_VERSION = APP_VERSION;
 
 function showVersionUpdateBanner() {
@@ -827,7 +896,7 @@ let weatherLoopTimer = null;
 let weatherLoopIndex = 0;
 let weatherMode = 'off';
 let weatherClockTimer = null;
-let circleOfferTool = { active: false, orderId: null, radiusMiles: 5, ghostCircle: null, pendingCircle: null, locked: false };
+let circleOfferTool = { active: false, orderId: null, radiusMiles: 5, ghostCircle: null, pendingCircle: null, locked: false, executing: false, confirmModal: null };
 
 const attemptedOffersByOrder = new Map();
 const currentOrderDetailsCache = new Map();
@@ -2138,7 +2207,7 @@ function renderOrdersList() {
                 <option value="5" selected>5 mi</option>
                 <option value="10">10 mi</option>
               </select>
-              <button class="mini-btn circle-offer-btn" data-action="circle-offer" data-order-id="${escapeHtml(o.orderId)}" title="Send manual offer to available drivers inside a map circle" aria-label="Circle offer">⭕</button>
+              <button class="mini-btn circle-offer-btn" data-action="circle-offer" data-order-id="${escapeHtml(o.orderId)}" title="Circle offer tool: click again to cancel" aria-label="Circle offer">⭕</button>
             </div>
             <div class="circle-offer-help" id="circle-help-${escapeHtml(o.orderId)}">Circle offer active. Move over the map to preview the radius, then click to place it. Confirm to send offers to all available visible Catering drivers inside the circle, or cancel to unlock the map.</div>
             <div class="v1-driver-list">${orderCardDriverRows(o)}</div>
@@ -2181,6 +2250,10 @@ function renderOrdersList() {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       const id = btn.dataset.orderId;
+      if (circleOfferTool.active && String(circleOfferTool.orderId || '') === String(id) && !circleOfferTool.executing) {
+        cancelCircleOfferTool('Circle offer canceled.');
+        return;
+      }
       const radiusSel = [...document.querySelectorAll('.circle-radius-select')].find(sel => String(sel.dataset.orderId || '') === String(id));
       startCircleOfferTool(id, Number(radiusSel?.value || 5));
     });
@@ -2335,8 +2408,12 @@ function clearCircleOfferGraphics() {
   if (circleOfferTool.pendingCircle) {
     try { map.removeLayer(circleOfferTool.pendingCircle); } catch (_) {}
   }
+  if (circleOfferTool.confirmModal) {
+    try { circleOfferTool.confirmModal.remove(); } catch (_) {}
+  }
   circleOfferTool.ghostCircle = null;
   circleOfferTool.pendingCircle = null;
+  circleOfferTool.confirmModal = null;
 }
 function setCircleOfferUi(orderId, active, text) {
   document.querySelectorAll('.circle-offer-btn').forEach(btn => {
@@ -2358,7 +2435,7 @@ function cancelCircleOfferTool(message) {
   document.removeEventListener('keydown', onCircleOfferKeyDown);
   clearCircleOfferGraphics();
   setMapInteractionLocked(false);
-  circleOfferTool = { active: false, orderId: null, radiusMiles: 5, ghostCircle: null, pendingCircle: null, locked: false };
+  circleOfferTool = { active: false, orderId: null, radiusMiles: 5, ghostCircle: null, pendingCircle: null, locked: false, executing: false, confirmModal: null };
   setCircleOfferUi(orderId, false);
   if (message) setOrdersStatus(message, 'info');
 }
@@ -2403,6 +2480,49 @@ function visibleAvailableDriversInsideCircle(order, center, radiusMiles) {
     })
     .map(x => x.p);
 }
+function showCircleOfferConfirm({ order, candidates, radiusMiles }) {
+  return new Promise(resolve => {
+    const shell = document.getElementById('mapShell') || document.body;
+    if (circleOfferTool.confirmModal) {
+      try { circleOfferTool.confirmModal.remove(); } catch (_) {}
+      circleOfferTool.confirmModal = null;
+    }
+    const modal = document.createElement('div');
+    modal.className = 'circle-offer-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'false');
+    modal.innerHTML = `
+      <div class="circle-offer-modal-head">
+        <div class="circle-offer-modal-icon">⭕</div>
+        <div>
+          <div class="circle-offer-modal-title">Send Circle Offers?</div>
+          <div class="circle-offer-modal-sub">Order ${escapeHtml(order.orderId)} · ${escapeHtml(radiusMiles)} mile radius</div>
+        </div>
+      </div>
+      <div class="circle-offer-modal-body">
+        <div class="circle-offer-modal-copy">Send manual offers to the available visible Catering drivers inside the circle you placed on the map.</div>
+        <div class="circle-offer-modal-stats">
+          <div class="circle-offer-stat"><div class="circle-offer-stat-value">${escapeHtml(candidates.length)}</div><div class="circle-offer-stat-label">Drivers</div></div>
+          <div class="circle-offer-stat"><div class="circle-offer-stat-value">${escapeHtml(radiusMiles)} mi</div><div class="circle-offer-stat-label">Radius</div></div>
+          <div class="circle-offer-stat"><div class="circle-offer-stat-value">${escapeHtml(order.orderId)}</div><div class="circle-offer-stat-label">Order</div></div>
+        </div>
+        <div class="circle-offer-modal-actions">
+          <button type="button" class="mini-btn secondary" data-circle-confirm="cancel">Cancel</button>
+          <button type="button" class="mini-btn" data-circle-confirm="send">Send Offers</button>
+        </div>
+      </div>`;
+    shell.appendChild(modal);
+    circleOfferTool.confirmModal = modal;
+    const finish = value => {
+      if (circleOfferTool.confirmModal === modal) circleOfferTool.confirmModal = null;
+      try { modal.remove(); } catch (_) {}
+      resolve(value);
+    };
+    modal.querySelector('[data-circle-confirm="cancel"]')?.addEventListener('click', () => finish(false));
+    modal.querySelector('[data-circle-confirm="send"]')?.addEventListener('click', () => finish(true));
+  });
+}
+
 async function executeCircleOffer(orderId, center, radiusMiles) {
   const order = allOrders.find(x => String(x.orderId) === String(orderId));
   const status = document.getElementById(`assign-status-${orderId}`);
@@ -2420,12 +2540,6 @@ async function executeCircleOffer(orderId, center, radiusMiles) {
     renderOrdersList();
     return;
   }
-  const confirmMsg = `Send manual offers for Order ${order.orderId} to ${candidates.length} available driver${candidates.length === 1 ? '' : 's'} inside this ${radiusMiles} mile circle?`;
-  if (!window.confirm(confirmMsg)) {
-    cancelCircleOfferTool('Circle offer canceled.');
-    renderOrdersList();
-    return;
-  }
   if (circleOfferTool.ghostCircle) {
     try { map.removeLayer(circleOfferTool.ghostCircle); } catch (_) {}
     circleOfferTool.ghostCircle = null;
@@ -2440,6 +2554,15 @@ async function executeCircleOffer(orderId, center, radiusMiles) {
     dashArray: '4 6',
     interactive: false
   }).addTo(map);
+  setCircleOfferUi(orderId, true, `Circle placed (${radiusMiles} mi). Confirm the offer from the map prompt, or cancel to unlock the map.`);
+  const confirmed = await showCircleOfferConfirm({ order, candidates, radiusMiles });
+  if (!confirmed) {
+    cancelCircleOfferTool('Circle offer canceled.');
+    renderOrdersList();
+    return;
+  }
+  circleOfferTool.executing = true;
+  setCircleOfferUi(orderId, true, `Sending circle offers to ${candidates.length} driver${candidates.length === 1 ? '' : 's'}…`);
 
   let success = 0;
   let failed = 0;
@@ -2460,7 +2583,7 @@ async function executeCircleOffer(orderId, center, radiusMiles) {
   renderOrdersList();
 }
 function onCircleOfferMapClick(e) {
-  if (!circleOfferTool.active || !e?.latlng) return;
+  if (!circleOfferTool.active || circleOfferTool.executing || circleOfferTool.confirmModal || !e?.latlng) return;
   if (e.originalEvent) {
     L.DomEvent.stopPropagation(e.originalEvent);
     L.DomEvent.preventDefault(e.originalEvent);
@@ -2470,6 +2593,10 @@ function onCircleOfferMapClick(e) {
   executeCircleOffer(orderId, e.latlng, radius);
 }
 function startCircleOfferTool(orderId, radiusMiles) {
+  if (circleOfferTool.active && String(circleOfferTool.orderId || '') === String(orderId) && !circleOfferTool.executing) {
+    cancelCircleOfferTool('Circle offer canceled.');
+    return;
+  }
   const order = allOrders.find(x => String(x.orderId) === String(orderId));
   const status = document.getElementById(`assign-status-${orderId}`);
   if (!order || !orderModeAllowsAssign()) {
