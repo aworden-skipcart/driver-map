@@ -144,10 +144,10 @@
   .checkbox-row input { width: 14px; height: 14px; accent-color: var(--cyan); cursor: pointer; flex: none; }
   .checkbox-row span { min-width: 0; }
 
-  .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; justify-content: stretch; }
-  .stat { background: var(--panel-2); border: 1px solid var(--border); padding: 7px 5px; border-radius: 6px; text-align: center; min-width: 0; }
-  .stat-value { font-size: 16px; font-weight: 700; color: var(--white); font-family: 'Barlow Condensed', sans-serif; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .stat-label { font-size: 8px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-top: 2px; line-height: 1.05; min-height: 17px; display: flex; align-items: center; justify-content: center; }
+  .stats { display: grid; grid-template-columns: repeat(2, minmax(0, 112px)); gap: 8px; justify-content: center; }
+  .stat { background: var(--panel-2); border: 1px solid var(--border); padding: 8px 6px; border-radius: 6px; text-align: center; }
+  .stat-value { font-size: 18px; font-weight: 700; color: var(--white); font-family: 'Barlow Condensed', sans-serif; }
+  .stat-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-top: 2px; }
 
   .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
   .dot-online { background: var(--success); }
@@ -662,18 +662,11 @@
       <div class="section">
         <div class="section-title">Stats</div>
         <div class="stats">
-          <div class="stat"><div class="stat-value" id="statTotal">0</div><div class="stat-label">Total Drivers</div></div>
+          <div class="stat"><div class="stat-value" id="statTotal">0</div><div class="stat-label">Total</div></div>
           <div class="stat"><div class="stat-value" id="statShown">0</div><div class="stat-label">Shown</div></div>
           <div class="stat"><div class="stat-value" id="statOnline">0</div><div class="stat-label">Online</div></div>
           <div class="stat"><div class="stat-value" id="statOnJob">0</div><div class="stat-label">On Job</div></div>
           <div class="stat"><div class="stat-value" id="statScheduled">0</div><div class="stat-label">Scheduled</div></div>
-          <div class="stat"><div class="stat-value" id="statOrdersPerDriver">0</div><div class="stat-label">Orders / Driver</div></div>
-          <div class="stat"><div class="stat-value" id="statOrderTotal">0</div><div class="stat-label">Total Orders</div></div>
-          <div class="stat"><div class="stat-value" id="statOrderUnassigned">0</div><div class="stat-label">Unassigned</div></div>
-          <div class="stat"><div class="stat-value" id="statOrderInProgress">0</div><div class="stat-label">In Progress</div></div>
-          <div class="stat"><div class="stat-value" id="statOrderCost">$0</div><div class="stat-label">Order Cost</div></div>
-          <div class="stat"><div class="stat-value" id="statDriverPay">$0</div><div class="stat-label">Driver Pay</div></div>
-          <div class="stat"><div class="stat-value" id="statOtherFee">$0</div><div class="stat-label">Other Fee</div></div>
         </div>
       </div>
 
@@ -770,7 +763,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script>
-const APP_VERSION = '2026.05.18.5';
+const APP_VERSION = '2026.05.18.4';
 window.APP_VERSION = APP_VERSION;
 
 function showVersionUpdateBanner() {
@@ -900,7 +893,7 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
 });
 
 let map, cluster, orderLayer, routeLayer, currentJobLayer,
-    allFeatures = [], allMarkers = [], allOrders = [], masterOrders = [], statsOrders = [], scheduledOrders = [],
+    allFeatures = [], allMarkers = [], allOrders = [], scheduledOrders = [],
     orderMarkers = [], selectedAssignOrderId = null, openFeeOrderId = null, lastFeeUpdate = null, autoRefreshTimer = null, currentOrderMode = 'unassigned';
 
 const WEATHER_WMS_URL = 'https://opengeo.ncep.noaa.gov/geoserver/conus/ows';
@@ -976,35 +969,7 @@ function syncOrderModeUi() {
     const list = document.getElementById('ordersList');
     if (list) list.innerHTML = `<div class="order-row" style="color: var(--muted); padding: 6px;">${escapeHtml(cfg.initial)}</div>`;
   }
-  if (!masterOrders.length) setOrdersInfoDetail(`${cfg.label} ezCater orders`);
-}
-function orderModeMatches(order, mode = currentOrderMode) {
-  const status = normalizedOrderStatus(order?.orderStatus);
-  if (mode === 'unassigned') return status === 'new';
-  if (mode === 'in-progress') return status === 'confirmed' || status === 'out for delivery';
-  if (mode === 'scheduled') return status === 'scheduled';
-  if (mode === 'completed') return status === 'delivered';
-  return true;
-}
-function applyOrderModeFilter(opts = {}) {
-  const previousAssignOrderId = selectedAssignOrderId;
-  allOrders = sortOrdersByStart((masterOrders.length ? masterOrders : allOrders).filter(o => orderModeMatches(o, currentOrderMode)));
-  if (!orderModeAllowsAssign()) selectedAssignOrderId = null;
-  else if (previousAssignOrderId && allOrders.some(o => String(o.orderId) === String(previousAssignOrderId))) selectedAssignOrderId = previousAssignOrderId;
-  else selectedAssignOrderId = null;
-  openFeeOrderId = opts.preserveFee ? openFeeOrderId : null;
-  updateAssignBanner();
-  mapOrders({ preserveView: opts.preserveView !== false });
-  renderOrdersList();
-  rebuildMarkers();
-}
-function orderModeLabelCounts(source = masterOrders) {
-  return {
-    unassigned: source.filter(o => orderModeMatches(o, 'unassigned')).length,
-    inProgress: source.filter(o => orderModeMatches(o, 'in-progress')).length,
-    scheduled: source.filter(o => orderModeMatches(o, 'scheduled')).length,
-    completed: source.filter(o => orderModeMatches(o, 'completed')).length
-  };
+  setOrdersInfoDetail(`${cfg.label} ezCater orders`);
 }
 function orderModeAllowsAssign() { return !!getOrderModeConfig().allowAssign; }
 
@@ -1343,9 +1308,7 @@ function bindAppEvents() {
       const nextMode = btn.dataset.orderMode || 'unassigned';
       if (nextMode === currentOrderMode) return;
       currentOrderMode = nextMode;
-      selectedAssignOrderId = null;
-      updateAssignBanner();
-      applyOrderModeFilter();
+      clearOrders();
       syncOrderModeUi();
     });
   });
@@ -1545,13 +1508,6 @@ function fmtMoney(value, symbol) {
   if (!Number.isFinite(n)) return '—';
   const prefix = symbol || '$';
   return `${prefix}${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-function fmtCompactCurrency(value, symbol = '$') {
-  const n = Number(value || 0);
-  if (!Number.isFinite(n)) return `${symbol}0`;
-  const abs = Math.abs(n);
-  const opts = abs >= 1000 ? { notation: 'compact', maximumFractionDigits: 1 } : { maximumFractionDigits: 0 };
-  return `${symbol}${n.toLocaleString(undefined, opts)}`;
 }
 function hasMoney(value) {
   return Number.isFinite(Number(value));
@@ -1906,37 +1862,12 @@ function rebuildMarkers() {
 
   cluster.addLayers(allMarkers);
 
-  updateStats({ shown, online, onJob, scheduled });
-}
-
-function updateStats(driverStats = {}) {
-  const totalDrivers = allFeatures.length;
-  const shown = Number(driverStats.shown || 0);
-  const online = Number(driverStats.online || 0);
-  const onJob = Number(driverStats.onJob || 0);
-  const scheduledDrivers = Number(driverStats.scheduled || 0);
-  const sourceOrders = statsOrders.length ? statsOrders : masterOrders;
-  const counts = orderModeLabelCounts(sourceOrders);
-  const uniqueDriverIds = new Set(allFeatures.map(f => driverIdValue(f.properties)).filter(Boolean));
-  const uniqueOrderIds = new Set(sourceOrders.map(o => String(o.orderId || o.OrderId || '')).filter(Boolean));
-  const ordersPerDriver = uniqueDriverIds.size ? (uniqueOrderIds.size / uniqueDriverIds.size) : 0;
-  const inProgressCount = counts.inProgress;
-  const totalOrders = sourceOrders.length;
-  const sum = (fn) => sourceOrders.reduce((acc, o) => acc + (Number(fn(o)) || 0), 0);
-
-  const set = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
-  set('statTotal', totalDrivers.toLocaleString());
-  set('statShown', shown.toLocaleString());
-  set('statOnline', online.toLocaleString());
-  set('statOnJob', onJob.toLocaleString());
-  set('statScheduled', scheduledDrivers.toLocaleString());
-  set('statOrdersPerDriver', ordersPerDriver ? ordersPerDriver.toFixed(2) : '0');
-  set('statOrderTotal', totalOrders.toLocaleString());
-  set('statOrderUnassigned', counts.unassigned.toLocaleString());
-  set('statOrderInProgress', inProgressCount.toLocaleString());
-  set('statOrderCost', fmtCompactCurrency(sum(o => o.orderCost)));
-  set('statDriverPay', fmtCompactCurrency(sum(o => o.driverTotalPay)));
-  set('statOtherFee', fmtCompactCurrency(sum(o => o.driverPayBreakdown?.otherFee)));
+  document.getElementById('statTotal').textContent  = allFeatures.length.toLocaleString();
+  document.getElementById('statShown').textContent  = shown.toLocaleString();
+  document.getElementById('statOnline').textContent = online.toLocaleString();
+  document.getElementById('statOnJob').textContent  = onJob.toLocaleString();
+  const statScheduled = document.getElementById('statScheduled');
+  if (statScheduled) statScheduled.textContent = scheduled.toLocaleString();
 }
 
 function rebuildZoneFilter() {
@@ -2028,11 +1959,9 @@ function hideOrderFromPanelUntilReload(orderId) {
   const id = String(orderId || '');
   if (!id) return false;
 
-  const before = masterOrders.length || allOrders.length;
-  masterOrders = masterOrders.filter(o => String(o.orderId) !== id);
-  statsOrders = statsOrders.filter(o => String(o.orderId) !== id);
+  const before = allOrders.length;
   allOrders = allOrders.filter(o => String(o.orderId) !== id);
-  const removed = (masterOrders.length || allOrders.length) !== before;
+  const removed = allOrders.length !== before;
 
   if (String(selectedAssignOrderId || '') === id) {
     selectedAssignOrderId = null;
@@ -2056,8 +1985,6 @@ function clearOrders() {
   selectedAssignOrderId = null;
   updateAssignBanner();
   allOrders = [];
-  masterOrders = [];
-  statsOrders = [];
   scheduledOrders = [];
   openFeeOrderId = null;
   lastFeeUpdate = null;
@@ -2068,7 +1995,6 @@ function clearOrders() {
   setOrdersInfoDetail(`${getOrderModeConfig().label} ezCater orders`);
   document.getElementById('ordersList').innerHTML = `<div class="order-row" style="color: var(--muted); padding: 6px;">${escapeHtml(getOrderModeConfig().initial)}</div>`;
   setOrdersStatus('', '');
-  updateStats();
 }
 
 function fmtDateTime(v) {
@@ -3107,9 +3033,7 @@ async function searchOrdersByNumber() {
     const json = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(json.error || 'Order search failed (' + r.status + ')');
 
-    masterOrders = sortOrdersByStart(Array.isArray(json.orders) ? json.orders : []);
-    statsOrders = masterOrders.slice();
-    allOrders = masterOrders.slice();
+    allOrders = sortOrdersByStart(Array.isArray(json.orders) ? json.orders : []);
     scheduledOrders = [];
     selectedAssignOrderId = null;
     openFeeOrderId = null;
@@ -3145,11 +3069,11 @@ async function loadOrders(opts = {}) {
     return;
   }
 
-  const hours = document.getElementById('ordersWindow')?.value || '12';
-  const selectedRegionIds = getSelectedRegionIds();
-  const regionIds = selectedRegionIds.length >= 9 ? [] : selectedRegionIds;
+  const cfg = getOrderModeConfig();
+  const hours = currentOrderMode === 'scheduled' ? '24' : (document.getElementById('ordersWindow').value || '12');
+  const regionIds = getSelectedRegionIds();
   if (!opts.quiet) {
-    setOrdersStatus(`Loading all ezCater order sections for ${selectedRegionLabel()}…`, 'info');
+    setOrdersStatus(cfg.loading(), 'info');
     setOrdersLoading(true);
   }
   document.getElementById('loadOrdersBtn').disabled = true;
@@ -3157,7 +3081,7 @@ async function loadOrders(opts = {}) {
   try {
     const targets = regionIds.length ? regionIds : [''];
     const results = await Promise.all(targets.map(async regionId => {
-      const params = new URLSearchParams({ mode: 'all', hours });
+      const params = new URLSearchParams({ mode: currentOrderMode, hours });
       if (regionId) params.set('regionId', regionId);
       const url = `/api/orders?${params.toString()}`;
       const r = await fetch(url, { headers: { 'X-Usertoken': Session.userToken, 'Accept': 'application/json' } });
@@ -3165,26 +3089,22 @@ async function loadOrders(opts = {}) {
       if (!r.ok) throw new Error(`${regionId ? regionNameFromId(regionId) + ': ' : ''}${json.error || 'Orders request failed (' + r.status + ')'}`);
       return json;
     }));
-
-    masterOrders = sortOrdersByStart(mergeByKey(results.flatMap(j => Array.isArray(j.orders) ? j.orders : []), o => String(o.orderId || o.jobId || JSON.stringify(o))));
-    statsOrders = sortOrdersByStart(mergeByKey(results.flatMap(j => Array.isArray(j.statsOrders) ? j.statsOrders : []), o => String(o.orderId || o.jobId || JSON.stringify(o))));
-    if (!statsOrders.length) statsOrders = masterOrders.slice();
+    const previousAssignOrderId = selectedAssignOrderId;
+    allOrders = sortOrdersByStart(mergeByKey(results.flatMap(j => Array.isArray(j.orders) ? j.orders : []), o => String(o.orderId || o.jobId || JSON.stringify(o))));
     scheduledOrders = sortOrdersByStart(mergeByKey(results.flatMap(j => Array.isArray(j.scheduledOrders) ? j.scheduledOrders : []), o => String(o.orderId || o.jobId || JSON.stringify(o))));
-
-    if (!opts.preserveSelection || !orderModeAllowsAssign()) {
-      selectedAssignOrderId = null;
-      openFeeOrderId = opts.preserveSelection ? openFeeOrderId : null;
-      lastFeeUpdate = opts.preserveSelection ? lastFeeUpdate : null;
-    }
-    applyOrderModeFilter({ preserveView: !!opts.preserveView, preserveFee: !!opts.preserveSelection });
-    syncOrderModeUi();
-
-    const counts = orderModeLabelCounts(masterOrders);
-    const capLabel = ` · Unassigned next ${hours}h · Scheduled next 24h · In Progress/Completed today`;
-    const orderInfoDetail = `${masterOrders.length.toLocaleString()} total loaded for ${selectedRegionLabel()}${capLabel}`;
-    const statusDetail = `${counts.unassigned.toLocaleString()} Unassigned · ${counts.inProgress.toLocaleString()} In Progress · ${counts.scheduled.toLocaleString()} Scheduled · ${counts.completed.toLocaleString()} Completed`;
+    if (!opts.preserveSelection || !cfg.allowAssign) { selectedAssignOrderId = null; openFeeOrderId = opts.preserveSelection ? openFeeOrderId : null; lastFeeUpdate = opts.preserveSelection ? lastFeeUpdate : null; }
+    else if (previousAssignOrderId && allOrders.some(o => String(o.orderId) === String(previousAssignOrderId))) selectedAssignOrderId = previousAssignOrderId;
+    else selectedAssignOrderId = null;
+    updateAssignBanner();
+    mapOrders({ preserveView: !!opts.preserveView });
+    renderOrdersList();
+    rebuildMarkers();
+    const windowEnds = results.map(j => j.windowEnd).filter(Boolean).sort();
+    const capLabel = windowEnds.length ? ` · no later than ${fmtDateTime(windowEnds[0])}` : '';
+    const orderInfoDetail = cfg.info(allOrders.length, hours, capLabel, scheduledOrders.length);
+    const statusDetail = cfg.statusDetail(allOrders.length, hours, capLabel, scheduledOrders.length);
     setOrdersInfoDetail(orderInfoDetail);
-    if (!opts.quiet) setOrdersStatus(`${masterOrders.length.toLocaleString()} ${masterOrders.length === 1 ? 'Order' : 'Orders'} loaded`, 'success', statusDetail);
+    if (!opts.quiet) setOrdersStatus(`${allOrders.length.toLocaleString()} ${allOrders.length === 1 ? 'Order' : 'Orders'} loaded`, 'success', statusDetail);
   } catch (err) {
     console.error(err);
     if (!opts.quiet) setOrdersStatus('Error: ' + err.message, 'error');
