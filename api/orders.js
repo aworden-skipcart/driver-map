@@ -37,7 +37,7 @@ export default async function handler(req, res) {
   }
 
   const modeRaw = String(req.query?.mode || 'unassigned').toLowerCase();
-  const mode = ['unassigned', 'in-progress', 'scheduled', 'completed'].includes(modeRaw) ? modeRaw : 'unassigned';
+  const mode = ['unassigned', 'in-progress', 'scheduled', 'completed', 'stats'].includes(modeRaw) ? modeRaw : 'unassigned';
 
   const hoursRaw = Number(req.query?.hours || 12);
   const hours = [12, 24].includes(hoursRaw) ? hoursRaw : 12;
@@ -58,6 +58,18 @@ export default async function handler(req, res) {
 
   try {
     const requestedRegionName = REGION_NAMES[String(regionId)] || '';
+
+    if (mode === 'stats') {
+      const stats = await buildOrderStats({ now, today, requestedRegionName, pageSize, maxPages: 6, appToken: APPTOKEN, userToken });
+      res.setHeader('Cache-Control', 'no-store');
+      return res.status(200).json({
+        status: true,
+        mode: 'stats',
+        windowStart: today.start.toISOString(),
+        windowEnd: today.end.toISOString(),
+        stats
+      });
+    }
 
     if (exactOrderId) {
       const searchStart = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
@@ -171,6 +183,68 @@ export default async function handler(req, res) {
     console.error('[orders] proxy error:', err);
     return res.status(err.status || 502).json({ error: err.message || 'Could not reach orders API', upstream: err.upstream || null });
   }
+}
+
+async function buildOrderStats({ now, today, requestedRegionName, pageSize, maxPages, appToken, userToken }) {
+  const statusGroups = {
+    unassigned: ['New'],
+    inProgress: ['Confirmed', 'Out For Delivery', 'out_for_delivery', 'Out for Delivery'],
+    scheduled: ['Scheduled'],
+    completed: ['Delivered']
+  };
+
+  const allByGroup = {};
+  for (const [group, statuses] of Object.entries(statusGroups)) {
+    let raw = await fetchOrdersForStatuses({ statuses, start: today.start, end: today.end, pageSize, maxPages, appToken, userToken });
+    if (group === 'scheduled' && !raw.length) {
+      const unfiltered = await fetchOrdersByStatus({ statusName: null, start: today.start, end: today.end, pageSize, maxPages, appToken, userToken });
+      raw = unfiltered.filter(o => /scheduled/i.test(String(o.OrderStatus || o.orderStatus || '')));
+    }
+    const regionFiltered = requestedRegionName
+      ? raw.filter(o => String(o.RegionName || '').toLowerCase() === requestedRegionName.toLowerCase())
+      : raw;
+    const windowFiltered = regionFiltered.filter(order => orderOverlapsWindow(order, today.start.getTime(), today.end.getTime()));
+    allByGroup[group] = windowFiltered;
+  }
+
+  const combined = mergeRawOrders(Object.values(allByGroup).flat());
+  const enriched = await enrichOrders(combined, appToken, userToken);
+  const byId = new Map(enriched.map(o => [String(o.orderId || o.jobId || ''), o]));
+
+  const countUnique = rows => mergeRawOrders(rows).length;
+  const counts = {
+    unassigned: countUnique(allByGroup.unassigned || []),
+    inProgress: countUnique(allByGroup.inProgress || []),
+    scheduled: countUnique(allByGroup.scheduled || []),
+    completed: countUnique(allByGroup.completed || [])
+  };
+  counts.total = countUnique(Object.values(allByGroup).flat());
+
+  let orderCost = 0, driverPay = 0, otherFee = 0;
+  for (const o of enriched) {
+    orderCost += asNumber(o.orderCost) || 0;
+    driverPay += asNumber(o.driverTotalPay) || 0;
+    otherFee += asNumber(o.driverPayBreakdown?.otherFee) || 0;
+  }
+
+  return {
+    counts,
+    money: { orderCost, driverPay, otherFee },
+    refreshedAt: new Date().toISOString(),
+    statuses: statusGroups
+  };
+}
+
+function mergeRawOrders(rows) {
+  const seen = new Set();
+  const out = [];
+  for (const row of rows || []) {
+    const key = String(row.OrderId || row.orderId || row.JobId || row.jobId || JSON.stringify(row).slice(0, 80));
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(row);
+  }
+  return out;
 }
 
 async function fetchOrdersForStatuses({ statuses, start, end, pageSize, maxPages, appToken, userToken }) {
