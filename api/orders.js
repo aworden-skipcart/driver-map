@@ -31,6 +31,11 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized', reason: 'no_user_token' });
   }
 
+  const exactOrderId = String(req.query?.orderId || '').trim();
+  if (exactOrderId && !/^\d+$/.test(exactOrderId)) {
+    return res.status(400).json({ error: 'Invalid orderId' });
+  }
+
   const modeRaw = String(req.query?.mode || 'unassigned').toLowerCase();
   const mode = ['unassigned', 'in-progress', 'scheduled', 'completed'].includes(modeRaw) ? modeRaw : 'unassigned';
 
@@ -54,6 +59,31 @@ export default async function handler(req, res) {
   try {
     const requestedRegionName = REGION_NAMES[String(regionId)] || '';
 
+    if (exactOrderId) {
+      const searchStart = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+      const searchEnd = new Date(now.getTime() + 45 * 24 * 60 * 60 * 1000);
+      const raw = await fetchOrdersByStatus({ statusName: null, orderId: exactOrderId, start: searchStart, end: searchEnd, pageSize: 25, maxPages: 1, appToken: APPTOKEN, userToken });
+      const exactRows = raw.filter(o => String(o.OrderId || o.orderId || '') === exactOrderId);
+      const regionFiltered = requestedRegionName
+        ? exactRows.filter(o => String(o.RegionName || '').toLowerCase() === requestedRegionName.toLowerCase())
+        : exactRows;
+      const enriched = await enrichOrders(regionFiltered, APPTOKEN, userToken);
+      res.setHeader('Cache-Control', 'no-store');
+      return res.status(200).json({
+        status: true,
+        mode: 'search',
+        orderId: exactOrderId,
+        primaryStatuses: [],
+        totalFound: raw.length,
+        totalAfterRegionFilter: regionFiltered.length,
+        totalInsideWindow: regionFiltered.length,
+        windowStart: searchStart.toISOString(),
+        windowEnd: searchEnd.toISOString(),
+        orders: enriched,
+        scheduledOrders: []
+      });
+    }
+
     let primaryStatuses = ['New'];
     let primaryStart = now;
     let primaryEnd = rollingEnd;
@@ -61,7 +91,7 @@ export default async function handler(req, res) {
     let scheduledRaw = [];
 
     if (mode === 'in-progress') {
-      primaryStatuses = ['Confirmed', 'Out For Delivery'];
+      primaryStatuses = ['Confirmed', 'Out For Delivery', 'out_for_delivery', 'Out for Delivery'];
       primaryStart = today.start;
       primaryEnd = today.end;
       filterMode = 'overlap';
@@ -193,11 +223,11 @@ function getTimeZoneOffsetMs(date, timeZone) {
 }
 
 
-async function fetchOrdersByStatus({ statusName, start, end, pageSize, maxPages, appToken, userToken }) {
+async function fetchOrdersByStatus({ statusName, orderId, start, end, pageSize, maxPages, appToken, userToken }) {
   const baseFilters = {
     customers: [],
     orderstatus: statusName ? [{ name: statusName }] : [],
-    orders: [],
+    orders: orderId ? [{ orderId: String(orderId) }] : [],
     partners: [{ partnerId: 'EZCater' }],
     drivers: [],
     lastEvents: [],
