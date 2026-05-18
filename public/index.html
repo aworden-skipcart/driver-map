@@ -144,10 +144,11 @@
   .checkbox-row input { width: 14px; height: 14px; accent-color: var(--cyan); cursor: pointer; flex: none; }
   .checkbox-row span { min-width: 0; }
 
-  .stats { display: grid; grid-template-columns: repeat(2, minmax(0, 112px)); gap: 8px; justify-content: center; }
-  .stat { background: var(--panel-2); border: 1px solid var(--border); padding: 8px 6px; border-radius: 6px; text-align: center; }
-  .stat-value { font-size: 18px; font-weight: 700; color: var(--white); font-family: 'Barlow Condensed', sans-serif; }
-  .stat-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-top: 2px; }
+  .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; justify-content: stretch; }
+  .stat { background: var(--panel-2); border: 1px solid var(--border); padding: 7px 5px; border-radius: 6px; text-align: center; min-width: 0; }
+  .stat.order-stat { border-color: rgba(0,204,255,.18); background: rgba(0,204,255,.045); }
+  .stat-value { font-size: 15px; font-weight: 700; color: var(--white); font-family: 'Barlow Condensed', sans-serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .stat-label { font-size: 7.5px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
   .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
   .dot-online { background: var(--success); }
@@ -662,11 +663,18 @@
       <div class="section">
         <div class="section-title">Stats</div>
         <div class="stats">
-          <div class="stat"><div class="stat-value" id="statTotal">0</div><div class="stat-label">Total</div></div>
+          <div class="stat"><div class="stat-value" id="statTotal">0</div><div class="stat-label">Total Drivers</div></div>
           <div class="stat"><div class="stat-value" id="statShown">0</div><div class="stat-label">Shown</div></div>
           <div class="stat"><div class="stat-value" id="statOnline">0</div><div class="stat-label">Online</div></div>
           <div class="stat"><div class="stat-value" id="statOnJob">0</div><div class="stat-label">On Job</div></div>
           <div class="stat"><div class="stat-value" id="statScheduled">0</div><div class="stat-label">Scheduled</div></div>
+          <div class="stat"><div class="stat-value" id="statOrdersPerDriver">—</div><div class="stat-label">Orders / Driver</div></div>
+          <div class="stat order-stat"><div class="stat-value" id="statOrderTotal">—</div><div class="stat-label">Total Orders</div></div>
+          <div class="stat order-stat"><div class="stat-value" id="statOrderUnassigned">—</div><div class="stat-label">Unassigned</div></div>
+          <div class="stat order-stat"><div class="stat-value" id="statOrderInProgress">—</div><div class="stat-label">In Progress</div></div>
+          <div class="stat order-stat"><div class="stat-value" id="statOrderCost">—</div><div class="stat-label">Order Cost</div></div>
+          <div class="stat order-stat"><div class="stat-value" id="statDriverPay">—</div><div class="stat-label">Driver Pay</div></div>
+          <div class="stat order-stat"><div class="stat-value" id="statOtherFee">—</div><div class="stat-label">Other Fee</div></div>
         </div>
       </div>
 
@@ -763,7 +771,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script>
-const APP_VERSION = '2026.05.18.4';
+const APP_VERSION = '2026.05.18.6';
 window.APP_VERSION = APP_VERSION;
 
 function showVersionUpdateBanner() {
@@ -894,7 +902,7 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
 
 let map, cluster, orderLayer, routeLayer, currentJobLayer,
     allFeatures = [], allMarkers = [], allOrders = [], scheduledOrders = [],
-    orderMarkers = [], selectedAssignOrderId = null, openFeeOrderId = null, lastFeeUpdate = null, autoRefreshTimer = null, currentOrderMode = 'unassigned';
+    orderMarkers = [], selectedAssignOrderId = null, openFeeOrderId = null, lastFeeUpdate = null, autoRefreshTimer = null, orderStatsTimer = null, orderStatsSummary = null, currentOrderMode = 'unassigned';
 
 const WEATHER_WMS_URL = 'https://opengeo.ncep.noaa.gov/geoserver/conus/ows';
 const WEATHER_RADAR_LAYER = 'conus_cref_qcd';
@@ -982,10 +990,13 @@ function enterApp() {
   bindAppEvents();
   loadDrivers();
   startAutoRefresh();
+  refreshOrderStatsBackground({ force: false });
+  startOrderStatsRefresh();
 }
 
 function logout() {
   stopAutoRefresh();
+  stopOrderStatsRefresh();
   Session.clear();
   document.getElementById('password').value = '';
   document.getElementById('errorMsg').classList.remove('show');
@@ -1317,6 +1328,7 @@ function bindAppEvents() {
     allRegionsBtn.addEventListener('click', () => {
       document.querySelectorAll('#regionButtons .region-btn').forEach(btn => btn.classList.add('active'));
       syncAllRegionsButton();
+      refreshOrderStatsBackground({ force: true });
     });
   }
   document.querySelectorAll('#regionButtons .region-btn').forEach(btn => {
@@ -1324,6 +1336,7 @@ function bindAppEvents() {
       btn.classList.toggle('active');
       if (!getSelectedRegionIds().length) btn.classList.add('active');
       syncAllRegionsButton();
+      refreshOrderStatsBackground({ force: true });
     });
   });
   syncAllRegionsButton();
@@ -1868,6 +1881,7 @@ function rebuildMarkers() {
   document.getElementById('statOnJob').textContent  = onJob.toLocaleString();
   const statScheduled = document.getElementById('statScheduled');
   if (statScheduled) statScheduled.textContent = scheduled.toLocaleString();
+  updateOrderStatsTiles();
 }
 
 function rebuildZoneFilter() {
@@ -1914,6 +1928,128 @@ function ingestMergedDriverPayloads(payloads, opts = {}) {
   }
 }
 
+
+function fmtStatMoney(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '—';
+  if (Math.abs(n) >= 1000000) return '$' + (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+  if (Math.abs(n) >= 1000) return '$' + (n / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+  return '$' + n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+}
+
+function setTextIfPresent(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = value;
+}
+
+function updateOrderStatsTiles() {
+  const driverCount = Math.max(0, Number(allFeatures?.length || 0));
+  const orders = orderStatsSummary || {};
+  const counts = orders.counts || {};
+  const money = orders.money || {};
+  const totalOrders = Number(counts.total || 0);
+  const opd = driverCount > 0 && totalOrders > 0 ? (totalOrders / driverCount).toFixed(2) : '—';
+
+  setTextIfPresent('statOrdersPerDriver', opd);
+  setTextIfPresent('statOrderTotal', orderStatsSummary ? totalOrders.toLocaleString() : '—');
+  setTextIfPresent('statOrderUnassigned', orderStatsSummary ? Number(counts.unassigned || 0).toLocaleString() : '—');
+  setTextIfPresent('statOrderInProgress', orderStatsSummary ? Number(counts.inProgress || 0).toLocaleString() : '—');
+  setTextIfPresent('statOrderCost', orderStatsSummary ? fmtStatMoney(money.orderCost) : '—');
+  setTextIfPresent('statDriverPay', orderStatsSummary ? fmtStatMoney(money.driverPay) : '—');
+  setTextIfPresent('statOtherFee', orderStatsSummary ? fmtStatMoney(money.otherFee) : '—');
+}
+
+function orderStatsCacheKey() {
+  const ids = getSelectedRegionIds().join(',') || 'all';
+  const day = new Intl.DateTimeFormat('en-CA', { timeZone: APP_TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  return `sc_order_stats_${day}_${ids}`;
+}
+
+function loadCachedOrderStats() {
+  try {
+    const raw = localStorage.getItem(orderStatsCacheKey());
+    if (!raw) return null;
+    const cached = JSON.parse(raw);
+    if (!cached || !cached.summary) return null;
+    const ageMs = Date.now() - Number(cached.savedAt || 0);
+    if (!Number.isFinite(ageMs) || ageMs > 90 * 60 * 1000) return null;
+    return cached.summary;
+  } catch { return null; }
+}
+
+function saveCachedOrderStats(summary) {
+  try { localStorage.setItem(orderStatsCacheKey(), JSON.stringify({ savedAt: Date.now(), summary })); } catch {}
+}
+
+async function refreshOrderStatsBackground(opts = {}) {
+  if (!Session.isValid() || !Session.userToken) return;
+  if (refreshOrderStatsBackground._running) return;
+
+  const cached = loadCachedOrderStats();
+  if (!opts.force && cached) {
+    orderStatsSummary = cached;
+    updateOrderStatsTiles();
+    return;
+  }
+
+  refreshOrderStatsBackground._running = true;
+  try {
+    const regionIds = getSelectedRegionIds();
+    const targets = regionIds.length ? regionIds : [''];
+    const results = await Promise.all(targets.map(async regionId => {
+      const params = new URLSearchParams({ mode: 'stats' });
+      if (regionId) params.set('regionId', regionId);
+      const r = await fetch(`/api/orders?${params.toString()}`, { headers: { 'X-Usertoken': Session.userToken, 'Accept': 'application/json' } });
+      const json = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(`${regionId ? regionNameFromId(regionId) + ': ' : ''}${json.error || 'Order stats request failed (' + r.status + ')'}`);
+      return json.stats || null;
+    }));
+
+    orderStatsSummary = mergeOrderStatsSummaries(results.filter(Boolean));
+    saveCachedOrderStats(orderStatsSummary);
+    updateOrderStatsTiles();
+  } catch (err) {
+    console.warn('[order-stats] background refresh failed:', err.message || err);
+    const cached = loadCachedOrderStats();
+    if (cached) {
+      orderStatsSummary = cached;
+      updateOrderStatsTiles();
+    }
+  } finally {
+    refreshOrderStatsBackground._running = false;
+  }
+}
+
+function mergeOrderStatsSummaries(items) {
+  const out = {
+    counts: { total: 0, unassigned: 0, inProgress: 0, scheduled: 0, completed: 0 },
+    money: { orderCost: 0, driverPay: 0, otherFee: 0 },
+    refreshedAt: new Date().toISOString()
+  };
+  for (const item of items || []) {
+    const c = item.counts || {};
+    const m = item.money || {};
+    out.counts.total += Number(c.total || 0);
+    out.counts.unassigned += Number(c.unassigned || 0);
+    out.counts.inProgress += Number(c.inProgress || 0);
+    out.counts.scheduled += Number(c.scheduled || 0);
+    out.counts.completed += Number(c.completed || 0);
+    out.money.orderCost += Number(m.orderCost || 0);
+    out.money.driverPay += Number(m.driverPay || 0);
+    out.money.otherFee += Number(m.otherFee || 0);
+  }
+  return out;
+}
+
+function startOrderStatsRefresh() {
+  stopOrderStatsRefresh();
+  orderStatsTimer = setInterval(() => refreshOrderStatsBackground({ force: true }), 60 * 60 * 1000);
+}
+
+function stopOrderStatsRefresh() {
+  if (orderStatsTimer) clearInterval(orderStatsTimer);
+  orderStatsTimer = null;
+}
 
 function setOrdersStatus(msg, kind, detail) {
   const el = document.getElementById('ordersStatus');
