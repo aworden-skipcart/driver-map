@@ -310,6 +310,17 @@
   .v1-input { width: 100%; height: 32px; padding: 0 10px; background: rgba(0,0,0,.26); border: 1px solid var(--border2); border-radius: 8px; color: var(--text); font-size: 12px; font-family: 'Barlow', sans-serif; outline: none; transition: border-color .12s, box-shadow .12s; }
   .v1-input:focus { border-color: rgba(0,204,255,.45); box-shadow: 0 0 0 3px rgba(0,204,255,.08); }
 
+
+  .v1-assign-control-row { display: grid; grid-template-columns: minmax(0, 1fr) 78px 34px; gap: 6px; align-items: center; }
+  .v1-assign-control-row .v1-input { min-width: 0; }
+  .v1-radius-select { width: 78px; height: 32px; padding: 0 22px 0 8px; background: rgba(0,0,0,.26); border: 1px solid var(--border2); border-radius: 8px; color: var(--text); font-size: 11px; font-family: 'DM Mono', monospace; outline: none; appearance: none; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='%234A7C94' d='M0 0l5 6 5-6z'/></svg>"); background-repeat: no-repeat; background-position: right 8px center; }
+  .v1-radius-select:focus { border-color: rgba(0,204,255,.45); box-shadow: 0 0 0 3px rgba(0,204,255,.08); }
+  .circle-offer-btn { width: 34px; height: 32px; min-height: 32px; padding: 0; border-radius: 9px; display: grid; place-items: center; font-size: 16px; line-height: 1; }
+  .circle-offer-btn.active { background: var(--cyan); color: #020617; border-color: var(--cyan); box-shadow: 0 0 18px rgba(0,204,255,.24); }
+  .circle-offer-help { margin-top: 7px; padding: 7px 9px; border-radius: 9px; background: rgba(0,204,255,.08); border: 1px dashed rgba(0,204,255,.25); color: var(--cyan); font-size: 10px; line-height: 1.35; display: none; }
+  .circle-offer-help.show { display: block; }
+  body.circle-offer-active #map { cursor: crosshair; }
+
   .v1-driver-list { margin-top: 9px; display: grid; gap: 6px; max-height: 240px; overflow-y: auto; padding-right: 2px; }
   .v1-driver-row { display: grid; grid-template-columns: 26px 1fr auto auto; gap: 8px; align-items: center; padding: 8px 9px; background: rgba(0,0,0,.18); border: 1px solid rgba(148,163,184,.14); border-radius: 9px; cursor: pointer; transition: border-color .12s, background .12s; }
   .v1-driver-row:hover { border-color: rgba(0,204,255,.34); background: rgba(0,204,255,.08); }
@@ -671,7 +682,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script>
-const APP_VERSION = '2026.05.18.1';
+const APP_VERSION = '2026.05.18.2';
 window.APP_VERSION = APP_VERSION;
 
 function showVersionUpdateBanner() {
@@ -816,6 +827,7 @@ let weatherLoopTimer = null;
 let weatherLoopIndex = 0;
 let weatherMode = 'off';
 let weatherClockTimer = null;
+let circleOfferTool = { active: false, orderId: null, radiusMiles: 5, ghostCircle: null, pendingCircle: null, locked: false };
 
 const attemptedOffersByOrder = new Map();
 const currentOrderDetailsCache = new Map();
@@ -2119,7 +2131,16 @@ function renderOrdersList() {
           <div class="v1-assign-banner"><i class="ti ti-target" aria-hidden="true"></i><span>Assign mode is on. Click an available Catering driver below, or pick one on the map. Drivers with a ±1 hour scheduled conflict are hidden.</span></div>
           <div class="v1-assign-box" id="assign-${escapeHtml(o.orderId)}">
             <label class="v1-assign-label" for="driver-${escapeHtml(o.orderId)}">Catering driver — closest first</label>
-            <input class="v1-input assign-driver-search" id="driver-${escapeHtml(o.orderId)}" data-order-id="${escapeHtml(o.orderId)}" list="cateringDrivers" placeholder="Search driver ID or name…" />
+            <div class="v1-assign-control-row">
+              <input class="v1-input assign-driver-search" id="driver-${escapeHtml(o.orderId)}" data-order-id="${escapeHtml(o.orderId)}" list="cateringDrivers" placeholder="Search driver ID or name…" />
+              <select class="v1-radius-select circle-radius-select" data-order-id="${escapeHtml(o.orderId)}" title="Circle offer radius">
+                <option value="1">1 mi</option>
+                <option value="5" selected>5 mi</option>
+                <option value="10">10 mi</option>
+              </select>
+              <button class="mini-btn circle-offer-btn" data-action="circle-offer" data-order-id="${escapeHtml(o.orderId)}" title="Send manual offer to available drivers inside a map circle" aria-label="Circle offer">⭕</button>
+            </div>
+            <div class="circle-offer-help" id="circle-help-${escapeHtml(o.orderId)}">Circle offer active. Move over the map to preview the radius, then click to place it. Confirm to send offers to all available visible Catering drivers inside the circle, or cancel to unlock the map.</div>
             <div class="v1-driver-list">${orderCardDriverRows(o)}</div>
             <div class="v1-assign-foot"><button class="mini-btn" data-action="assign" data-order-id="${escapeHtml(o.orderId)}">Done assigning</button></div>
             <div class="v1-assign-status" id="assign-status-${escapeHtml(o.orderId)}"></div>
@@ -2154,6 +2175,14 @@ function renderOrdersList() {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       sendOrderOfferWithDriver(btn.dataset.orderId, btn.dataset.driverId);
+    });
+  });
+  list.querySelectorAll('[data-action="circle-offer"]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.orderId;
+      const radiusSel = [...document.querySelectorAll('.circle-radius-select')].find(sel => String(sel.dataset.orderId || '') === String(id));
+      startCircleOfferTool(id, Number(radiusSel?.value || 5));
     });
   });
   list.querySelectorAll('[data-action="open-fee"]').forEach(btn => {
@@ -2283,6 +2312,184 @@ function findCateringDriver(raw) {
       || null;
 }
 
+
+function getCircleMeters(radiusMiles) {
+  const miles = Number(radiusMiles);
+  return (Number.isFinite(miles) && miles > 0 ? miles : 5) * 1609.344;
+}
+function setMapInteractionLocked(locked) {
+  if (!map) return;
+  const methods = ['dragging', 'touchZoom', 'doubleClickZoom', 'scrollWheelZoom', 'boxZoom', 'keyboard'];
+  methods.forEach(name => {
+    try {
+      if (map[name] && typeof map[name][locked ? 'disable' : 'enable'] === 'function') map[name][locked ? 'disable' : 'enable']();
+    } catch (err) { console.warn('map lock toggle failed', name, err); }
+  });
+  circleOfferTool.locked = !!locked;
+  document.body.classList.toggle('circle-offer-active', !!locked);
+}
+function clearCircleOfferGraphics() {
+  if (circleOfferTool.ghostCircle) {
+    try { map.removeLayer(circleOfferTool.ghostCircle); } catch (_) {}
+  }
+  if (circleOfferTool.pendingCircle) {
+    try { map.removeLayer(circleOfferTool.pendingCircle); } catch (_) {}
+  }
+  circleOfferTool.ghostCircle = null;
+  circleOfferTool.pendingCircle = null;
+}
+function setCircleOfferUi(orderId, active, text) {
+  document.querySelectorAll('.circle-offer-btn').forEach(btn => {
+    const isCurrent = String(btn.dataset.orderId || '') === String(orderId || '');
+    btn.classList.toggle('active', !!active && isCurrent);
+    btn.disabled = !!active && !isCurrent;
+  });
+  document.querySelectorAll('.circle-offer-help').forEach(el => {
+    const isCurrent = String(el.id || '') === `circle-help-${String(orderId || '')}`;
+    el.classList.toggle('show', !!active && isCurrent);
+    if (text && isCurrent) el.textContent = text;
+  });
+}
+function cancelCircleOfferTool(message) {
+  if (!circleOfferTool.active) return;
+  const orderId = circleOfferTool.orderId;
+  map.off('mousemove', onCircleOfferMouseMove);
+  map.off('click', onCircleOfferMapClick);
+  document.removeEventListener('keydown', onCircleOfferKeyDown);
+  clearCircleOfferGraphics();
+  setMapInteractionLocked(false);
+  circleOfferTool = { active: false, orderId: null, radiusMiles: 5, ghostCircle: null, pendingCircle: null, locked: false };
+  setCircleOfferUi(orderId, false);
+  if (message) setOrdersStatus(message, 'info');
+}
+function onCircleOfferKeyDown(e) {
+  const key = e?.key;
+  if (key === 'Escape') cancelCircleOfferTool('Circle offer canceled.');
+}
+function onCircleOfferMouseMove(e) {
+  if (!circleOfferTool.active || !e?.latlng) return;
+  const meters = getCircleMeters(circleOfferTool.radiusMiles);
+  if (!circleOfferTool.ghostCircle) {
+    circleOfferTool.ghostCircle = L.circle(e.latlng, {
+      radius: meters,
+      color: '#00CCFF',
+      weight: 2,
+      opacity: 0.85,
+      fillColor: '#00CCFF',
+      fillOpacity: 0.06,
+      dashArray: '8 8',
+      interactive: false
+    }).addTo(map);
+  } else {
+    circleOfferTool.ghostCircle.setLatLng(e.latlng);
+    circleOfferTool.ghostCircle.setRadius(meters);
+  }
+}
+function visibleAvailableDriversInsideCircle(order, center, radiusMiles) {
+  const radius = Number(radiusMiles);
+  const seen = new Set();
+  return allMarkers
+    .map(marker => ({ marker, p: marker.driverProperties, latlng: marker.getLatLng() }))
+    .filter(x => x.p && x.latlng)
+    .filter(x => {
+      const id = driverIdValue(x.p);
+      if (!id || seen.has(id)) return false;
+      seen.add(id);
+      if (!hasCateringCohort(x.p)) return false;
+      if (wasDriverTriedForOrder(order.orderId, id)) return false;
+      if (driverUnavailableForOrder(x.p, order)) return false;
+      const mi = distanceMilesBetween(center.lat, center.lng, x.latlng.lat, x.latlng.lng);
+      return Number.isFinite(mi) && mi <= radius;
+    })
+    .map(x => x.p);
+}
+async function executeCircleOffer(orderId, center, radiusMiles) {
+  const order = allOrders.find(x => String(x.orderId) === String(orderId));
+  const status = document.getElementById(`assign-status-${orderId}`);
+  if (!order || !order.jobId) {
+    if (status) { status.textContent = 'Missing order/job for circle offer.'; status.className = 'v1-assign-status error'; }
+    cancelCircleOfferTool();
+    return;
+  }
+  const candidates = visibleAvailableDriversInsideCircle(order, center, radiusMiles);
+  if (!candidates.length) {
+    const msg = `No available visible Catering drivers found inside the ${radiusMiles} mile circle.`;
+    if (status) { status.textContent = msg; status.className = 'v1-assign-status error'; }
+    setOrdersStatus(msg, 'error');
+    cancelCircleOfferTool();
+    renderOrdersList();
+    return;
+  }
+  const confirmMsg = `Send manual offers for Order ${order.orderId} to ${candidates.length} available driver${candidates.length === 1 ? '' : 's'} inside this ${radiusMiles} mile circle?`;
+  if (!window.confirm(confirmMsg)) {
+    cancelCircleOfferTool('Circle offer canceled.');
+    renderOrdersList();
+    return;
+  }
+  if (circleOfferTool.ghostCircle) {
+    try { map.removeLayer(circleOfferTool.ghostCircle); } catch (_) {}
+    circleOfferTool.ghostCircle = null;
+  }
+  circleOfferTool.pendingCircle = L.circle(center, {
+    radius: getCircleMeters(radiusMiles),
+    color: '#4ade80',
+    weight: 2,
+    opacity: 0.9,
+    fillColor: '#4ade80',
+    fillOpacity: 0.08,
+    dashArray: '4 6',
+    interactive: false
+  }).addTo(map);
+
+  let success = 0;
+  let failed = 0;
+  for (let i = 0; i < candidates.length; i++) {
+    const driver = candidates[i];
+    const label = driver.Driver_Name || driverIdValue(driver);
+    const progress = `Circle offer ${i + 1}/${candidates.length}: sending to ${label}…`;
+    if (status) { status.textContent = progress; status.className = 'v1-assign-status'; }
+    setOrdersStatus(progress, 'info');
+    const ok = await sendOrderOfferWithDriver(order.orderId, driverIdValue(driver), { bulk: true, suppressRender: true });
+    if (ok) success++; else failed++;
+  }
+  const msg = `Circle offer complete: ${success} sent, ${failed} skipped/failed inside ${radiusMiles} mi.`;
+  if (status) { status.textContent = msg; status.className = failed ? 'v1-assign-status' : 'v1-assign-status success'; }
+  setOrdersStatus(msg, failed ? 'info' : 'success');
+  cancelCircleOfferTool();
+  rebuildMarkers();
+  renderOrdersList();
+}
+function onCircleOfferMapClick(e) {
+  if (!circleOfferTool.active || !e?.latlng) return;
+  if (e.originalEvent) {
+    L.DomEvent.stopPropagation(e.originalEvent);
+    L.DomEvent.preventDefault(e.originalEvent);
+  }
+  const orderId = circleOfferTool.orderId;
+  const radius = circleOfferTool.radiusMiles;
+  executeCircleOffer(orderId, e.latlng, radius);
+}
+function startCircleOfferTool(orderId, radiusMiles) {
+  const order = allOrders.find(x => String(x.orderId) === String(orderId));
+  const status = document.getElementById(`assign-status-${orderId}`);
+  if (!order || !orderModeAllowsAssign()) {
+    if (status) { status.textContent = 'Circle offer is only available while assigning an Unassigned order.'; status.className = 'v1-assign-status error'; }
+    return;
+  }
+  if (!selectedAssignOrderId || String(selectedAssignOrderId) !== String(orderId)) setAssignMode(orderId);
+  cancelCircleOfferTool();
+  circleOfferTool = { active: true, orderId: String(orderId), radiusMiles: Number(radiusMiles) || 5, ghostCircle: null, pendingCircle: null, locked: true };
+  setMapInteractionLocked(true);
+  setCircleOfferUi(orderId, true, `Circle offer active (${circleOfferTool.radiusMiles} mi). Move over the map to preview the dashed circle, click to place it, then confirm. Press Esc to cancel.`);
+  const msg = `Circle offer tool active: ${circleOfferTool.radiusMiles} mile radius. Move over the map to preview, click to confirm, or press Esc to cancel.`;
+  if (status) { status.textContent = msg; status.className = 'v1-assign-status'; }
+  setOrdersStatus(msg, 'info');
+  map.on('mousemove', onCircleOfferMouseMove);
+  map.on('click', onCircleOfferMapClick);
+  document.addEventListener('keydown', onCircleOfferKeyDown);
+  try { map.getContainer().focus(); } catch (_) {}
+}
+
 async function sendOrderOffer(orderId) {
   const input = document.getElementById(`driver-${orderId}`);
   const driver = findCateringDriver(input?.value);
@@ -2294,17 +2501,17 @@ async function sendOrderOffer(orderId) {
   return sendOrderOfferWithDriver(orderId, driver.DriverId);
 }
 
-async function sendOrderOfferWithDriver(orderId, driverId) {
+async function sendOrderOfferWithDriver(orderId, driverId, opts = {}) {
   const o = allOrders.find(x => String(x.orderId) === String(orderId));
   const driver = allFeatures.map(f => f.properties).find(p => String(p.DriverId) === String(driverId));
   const status = document.getElementById(`assign-status-${orderId}`);
   if (!o || !driver) {
     if (status) { status.textContent = 'Missing order or driver selection.'; status.className = 'v1-assign-status error'; }
-    return;
+    return false;
   }
   if (!hasCateringCohort(driver)) {
     if (status) { status.textContent = 'Selected driver does not show a Catering cohort in the driver location feed.'; status.className = 'v1-assign-status error'; }
-    return;
+    return false;
   }
   if (driverNeedsCurrentOrderCheck(driver)) {
     const msg = `Checking current order details for ${driver.Driver_Name || driver.DriverId} before sending offer…`;
@@ -2318,19 +2525,19 @@ async function sendOrderOfferWithDriver(orderId, driverId) {
     const msg = 'Current-order details are still loading. Try again in a moment.';
     if (status) { status.textContent = msg; status.className = 'v1-assign-status error'; }
     setOrdersStatus(msg, 'error');
-    return;
+    return false;
   }
   const conflicts = conflictInfo.items;
   if (conflicts.length) {
     const msg = `Driver is unavailable within ±1 hour of this order window: ${scheduledSummary(conflicts[0])}`;
     if (status) { status.textContent = msg; status.className = 'v1-assign-status error'; }
     setOrdersStatus(msg, 'error');
-    return;
+    return false;
   }
   if (status) { status.textContent = `Sending offer to ${driver.Driver_Name || driver.DriverId}…`; status.className = 'v1-assign-status'; }
   setOrdersStatus(`Sending offer to ${driver.Driver_Name || driver.DriverId} for Order ${o.orderId}…`, 'info');
   markDriverTriedForOrder(o.orderId, driver.DriverId);
-  rebuildMarkers();
+  if (!opts.suppressRender) rebuildMarkers();
 
   try {
     const r = await fetch('/api/assign-order', {
@@ -2353,8 +2560,8 @@ async function sendOrderOfferWithDriver(orderId, driverId) {
     if (status) { status.textContent = msg; status.className = 'v1-assign-status success'; }
     setOrdersStatus(msg, 'success');
     updateAssignBanner();
-    rebuildMarkers();
-    renderOrdersList();
+    if (!opts.suppressRender) { rebuildMarkers(); renderOrdersList(); }
+    return true;
   } catch (err) {
     console.error(err);
     const rawMessage = err.message || String(err);
@@ -2366,14 +2573,14 @@ async function sendOrderOfferWithDriver(orderId, driverId) {
         : `Order ${o.orderId} is no longer New or available.`;
       if (status) { status.textContent = msg; status.className = 'v1-assign-status'; }
       setOrdersStatus(msg, 'info');
-      return;
+      return false;
     }
 
     const msg = 'Error: ' + rawMessage;
     if (status) { status.textContent = msg; status.className = 'v1-assign-status error'; }
     setOrdersStatus(msg, 'error');
-    rebuildMarkers();
-    renderOrdersList();
+    if (!opts.suppressRender) { rebuildMarkers(); renderOrdersList(); }
+    return false;
   }
 }
 
