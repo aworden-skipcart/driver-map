@@ -427,6 +427,49 @@
   .marker-cluster-small, .marker-cluster-medium, .marker-cluster-large { background: rgba(0,204,255,0.2); }
   .marker-cluster-small div, .marker-cluster-medium div, .marker-cluster-large div { background: rgba(0,204,255,0.6); color: #020617; font-family: 'Barlow Condensed', sans-serif; font-weight: 800; }
 
+
+  .version-update-banner {
+    position: fixed;
+    right: 18px;
+    bottom: 18px;
+    z-index: 2000;
+    width: min(360px, calc(100vw - 36px));
+    padding: 14px;
+    border-radius: 14px;
+    border: 1px solid rgba(0,204,255,.42);
+    background: rgba(8,15,36,.97);
+    box-shadow: 0 18px 44px rgba(0,0,0,.45), 0 0 0 1px rgba(0,204,255,.08) inset;
+    display: none;
+    backdrop-filter: blur(10px);
+  }
+  .version-update-banner.show { display: block; animation: fadeUp .22s ease both; }
+  .version-update-title {
+    color: var(--cyan);
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 14px;
+    font-weight: 900;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    margin-bottom: 5px;
+  }
+  .version-update-copy { color: var(--text); font-size: 12px; line-height: 1.4; margin-bottom: 12px; }
+  .version-update-actions { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
+  .version-update-actions .mini-btn { min-height: 30px; }
+  .version-update-dismiss {
+    min-height: 30px;
+    padding: 0 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border2);
+    background: transparent;
+    color: var(--muted);
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 800;
+    letter-spacing: .10em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+  .version-update-dismiss:hover { color: var(--text); border-color: rgba(0,204,255,.42); }
+
   @keyframes loadingSlide { from { transform: translateX(-120%); } to { transform: translateX(260%); } }
   @keyframes spin { to { transform: rotate(360deg); } }
   @keyframes fadeDown { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: translateY(0); } }
@@ -471,7 +514,7 @@
     </div>
     <div class="card-footer">
       <button type="button" class="trouble-btn">Trouble logging in?</button>
-      <div class="version-text">driver-map v1.0</div>
+      <div class="version-text">driver-map v2026.05.18.1</div>
     </div>
   </div>
 </div>
@@ -615,9 +658,66 @@
   </aside>
 </div>
 
+
+<div class="version-update-banner" id="versionUpdateBanner" role="status" aria-live="polite">
+  <div class="version-update-title">Update Available</div>
+  <div class="version-update-copy">A new Driver Map version is available. Refresh to update and unlock the latest features.</div>
+  <div class="version-update-actions">
+    <button type="button" class="mini-btn" id="versionUpdateRefresh">Refresh Now</button>
+    <button type="button" class="version-update-dismiss" id="versionUpdateDismiss">Later</button>
+  </div>
+</div>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script>
+const APP_VERSION = '2026.05.18.1';
+window.APP_VERSION = APP_VERSION;
+
+function showVersionUpdateBanner() {
+  const banner = document.getElementById('versionUpdateBanner');
+  if (!banner) return;
+  banner.classList.add('show');
+}
+
+function setupVersionUpdateChecker() {
+  const refreshBtn = document.getElementById('versionUpdateRefresh');
+  const dismissBtn = document.getElementById('versionUpdateDismiss');
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', () => {
+      window.location.reload();
+    });
+  }
+  if (dismissBtn) {
+    dismissBtn.addEventListener('click', () => {
+      const banner = document.getElementById('versionUpdateBanner');
+      if (banner) banner.classList.remove('show');
+    });
+  }
+
+  async function checkForUpdate() {
+    try {
+      const url = `${window.location.pathname || '/'}?versionCheck=${Date.now()}`;
+      const res = await fetch(url, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+      });
+      if (!res.ok) return;
+      const html = await res.text();
+      const match = html.match(/const\s+APP_VERSION\s*=\s*['"]([^'"]+)['"]/);
+      const latestVersion = match && match[1];
+      if (latestVersion && latestVersion !== APP_VERSION) showVersionUpdateBanner();
+    } catch (err) {
+      console.warn('[version-check] unable to check for updates', err);
+    }
+  }
+
+  setTimeout(checkForUpdate, 15000);
+  setInterval(checkForUpdate, 5 * 60 * 1000);
+}
+
+setupVersionUpdateChecker();
+
 const Session = {
   get token()       { return sessionStorage.getItem('sc_token'); },
   get email()       { return sessionStorage.getItem('sc_email'); },
