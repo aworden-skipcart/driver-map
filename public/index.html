@@ -113,6 +113,10 @@
   .section { margin-bottom: 18px; padding-bottom: 18px; border-bottom: 1px solid var(--border); }
   .section:last-child { border-bottom: none; }
   .section-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.15em; color: var(--muted); margin-bottom: 10px; font-weight: 700; font-family: 'Barlow Condensed', sans-serif; }
+  .section-title-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+  .section-title-row .section-title { margin-bottom: 0; }
+  .region-all-btn { flex: none; min-height: 22px; padding: 0 10px; border-radius: 999px; border: 1px solid rgba(0,204,255,.28); background: rgba(0,204,255,.08); color: var(--cyan); font-family: 'Barlow Condensed', sans-serif; font-size: 10px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; cursor: pointer; }
+  .region-all-btn:hover, .region-all-btn.active { background: var(--cyan); border-color: var(--cyan); color: #020617; }
   #sidebarToggle { position: absolute; top: 50%; left: 320px; transform: translateY(-50%); z-index: 930; width: 24px; height: 54px; border: 1px solid var(--border2); border-left: none; border-radius: 0 10px 10px 0; background: rgba(8,15,36,.95); color: var(--cyan); cursor: pointer; display: grid; place-items: center; box-shadow: 7px 0 18px rgba(0,0,0,.28); transition: left .18s ease, background .15s, border-color .15s; }
   #sidebarToggle:hover { background: rgba(12,21,48,.98); border-color: rgba(0,204,255,.42); }
   #sidebarToggle .collapse-icon::before { content: '<'; font-family: 'Barlow Condensed', sans-serif; font-size: 18px; font-weight: 900; line-height: 1; }
@@ -485,7 +489,10 @@
 
     <div class="sidebar-body">
       <div class="section">
-        <div class="section-title">Regions</div>
+        <div class="section-title-row">
+          <div class="section-title">Regions</div>
+          <button type="button" class="region-all-btn" id="selectAllRegionsBtn" title="Select all regions">All</button>
+        </div>
         <div class="region-controls">
           <div class="region-button-grid" id="regionButtons" aria-label="Regions">
             <button type="button" class="region-btn" data-region-id="54" title="Region 1">1</button>
@@ -713,6 +720,7 @@ let weatherClockTimer = null;
 const attemptedOffersByOrder = new Map();
 const currentOrderDetailsCache = new Map();
 const currentOrderDetailsFetches = new Map();
+let assignConflictCheckRun = 0;
 
 const ORDER_MODE_CONFIG = {
   unassigned: {
@@ -1105,12 +1113,21 @@ function bindAppEvents() {
       syncOrderModeUi();
     });
   });
+  const allRegionsBtn = document.getElementById('selectAllRegionsBtn');
+  if (allRegionsBtn) {
+    allRegionsBtn.addEventListener('click', () => {
+      document.querySelectorAll('#regionButtons .region-btn').forEach(btn => btn.classList.add('active'));
+      syncAllRegionsButton();
+    });
+  }
   document.querySelectorAll('#regionButtons .region-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       btn.classList.toggle('active');
       if (!getSelectedRegionIds().length) btn.classList.add('active');
+      syncAllRegionsButton();
     });
   });
+  syncAllRegionsButton();
   ['filterOnline','filterOnJob','filterOffline','filterCatering','filterScheduledConflicts','searchBox','zoneFilter'].forEach(id => {
     const el = document.getElementById(id);
     el.addEventListener('input', rebuildMarkers);
@@ -1123,6 +1140,13 @@ function getSelectedRegionIds() {
     .map(btn => String(btn.dataset.regionId || '').trim())
     .filter(Boolean);
   return [...new Set(ids)];
+}
+function syncAllRegionsButton() {
+  const btn = document.getElementById('selectAllRegionsBtn');
+  if (!btn) return;
+  const all = [...document.querySelectorAll('#regionButtons .region-btn')];
+  const activeCount = all.filter(x => x.classList.contains('active')).length;
+  btn.classList.toggle('active', all.length > 0 && activeCount === all.length);
 }
 function regionNameFromId(id) {
   const n = Number(id);
@@ -1396,6 +1420,22 @@ function driverNeedsCurrentOrderCheck(p) {
   if (cached.order || cached.error) return false;
   return !!cached.loading || currentOrderDetailsFetches.has(key);
 }
+function driverCurrentOrderLookupPendingForAssign(p) {
+  // In assign mode, do not show/offer drivers with an active current-order id
+  // until the current-order detail check has either resolved or been marked stale.
+  // This prevents them from appearing as available, then failing only after click.
+  return driverNeedsCurrentOrderCheck(p) || driverHasPendingCurrentOrderCheck(p);
+}
+async function runLimited(items, limit, worker) {
+  const queue = [...items];
+  const workers = Array.from({ length: Math.max(1, Math.min(limit, queue.length || 1)) }, async () => {
+    while (queue.length) {
+      const item = queue.shift();
+      try { await worker(item); } catch (err) { console.warn('limited worker failed', err); }
+    }
+  });
+  await Promise.all(workers);
+}
 function currentOrderConflictForOrder(p, order) {
   const current = getCachedCurrentOrderForDriver(p);
   const window = getConflictWindowForOrder(order);
@@ -1409,7 +1449,7 @@ function getDriverConflictInfoForOrder(p, order) {
     .map(o => ({ ...o, conflictSource: 'scheduled' }));
   const currentConflict = currentOrderConflictForOrder(p, order);
   const items = currentConflict ? [currentConflict, ...scheduledItems.filter(o => String(o.orderId) !== String(currentConflict.orderId))] : scheduledItems;
-  return { items, pending: driverHasPendingCurrentOrderCheck(p) };
+  return { items, pending: driverCurrentOrderLookupPendingForAssign(p) };
 }
 function driverUnavailableForOrder(p, order) {
   const info = getDriverConflictInfoForOrder(p, order);
@@ -1445,6 +1485,29 @@ function getDriverConflictsForOrder(p, order) {
 function driverHasConflictForSelectedOrder(p) {
   const selected = getSelectedAssignOrder();
   return !!selected && driverUnavailableForOrder(p, selected);
+}
+async function preloadConflictChecksForAssignOrder(order) {
+  if (!order || !orderModeAllowsAssign()) return;
+  const runId = ++assignConflictCheckRun;
+  const candidates = allFeatures
+    .map(f => ({ feature: f, p: f.properties, distanceMiles: driverDistanceToOrderMiles(f, order) }))
+    .filter(x => hasCateringCohort(x.p))
+    .filter(x => currentOrderCacheKeyForDriver(x.p))
+    .filter(x => driverNeedsCurrentOrderCheck(x.p))
+    .sort((a, b) => {
+      const ak = Number.isFinite(a.distanceMiles);
+      const bk = Number.isFinite(b.distanceMiles);
+      if (ak && bk && a.distanceMiles !== b.distanceMiles) return a.distanceMiles - b.distanceMiles;
+      if (ak !== bk) return ak ? -1 : 1;
+      return String(a.p.Driver_Name || '').localeCompare(String(b.p.Driver_Name || ''));
+    })
+    .slice(0, 30);
+  if (!candidates.length) return;
+  await runLimited(candidates, 4, x => preloadCurrentDriverOrder(x.p));
+  if (runId !== assignConflictCheckRun) return;
+  if (String(selectedAssignOrderId || '') !== String(order.orderId || '')) return;
+  rebuildMarkers();
+  renderOrdersList();
 }
 function scheduledSummary(o) {
   const driver = o.driverName ? ` · ${o.driverName}` : '';
@@ -1719,6 +1782,7 @@ function hideOrderFromPanelUntilReload(orderId) {
 }
 
 function clearOrders() {
+  assignConflictCheckRun++;
   selectedAssignOrderId = null;
   updateAssignBanner();
   allOrders = [];
@@ -1813,7 +1877,7 @@ function orderCardDriverRows(order) {
   const rows = allFeatures
     .map(f => ({ feature: f, p: f.properties, distanceMiles: driverDistanceToOrderMiles(f, qOrder) }))
     .filter(x => hasCateringCohort(x.p))
-    .filter(x => !qOrder || !driverHasConflictForSelectedOrder(x.p))
+    .filter(x => !qOrder || !driverUnavailableForOrder(x.p, qOrder))
     .filter(x => {
       const id = driverIdValue(x.p);
       if (!id || seen.has(id)) return false;
@@ -2072,9 +2136,12 @@ function selectOrder(orderId, pan) {
 function setAssignMode(orderId) {
   if (!orderModeAllowsAssign()) orderId = null;
   selectedAssignOrderId = orderId ? String(orderId) : null;
+  assignConflictCheckRun++;
   updateAssignBanner();
   rebuildMarkers();
   renderOrdersList();
+  const order = getSelectedAssignOrder();
+  if (order) preloadConflictChecksForAssignOrder(order);
 }
 function updateAssignBanner() {
   const el = document.getElementById('assignBanner');
