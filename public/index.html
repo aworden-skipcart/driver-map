@@ -206,6 +206,14 @@
   .order-mode-tab:hover { border-color: rgba(0,204,255,.45); color: var(--text); }
   .order-mode-tab.active { color: #031018; background: var(--cyan); border-color: var(--cyan); box-shadow: 0 0 16px rgba(0,204,255,.22); }
   .orders-window-row.hidden { display: none; }
+  .orders-action-row { display: grid; grid-template-columns: minmax(132px, 172px) minmax(0, 1fr) minmax(0, 1fr); gap: 8px; align-items: end; }
+  .orders-action-row .orders-window-row { min-width: 0; }
+  .orders-action-row .app-select { height: 36px; }
+  .orders-action-row .app-btn { margin-top: 0; height: 36px; }
+  @media (max-width: 520px) {
+    .orders-action-row { grid-template-columns: 1fr 1fr; }
+    .orders-action-row .orders-window-row { grid-column: 1 / -1; }
+  }
   .order-status-chip { display: inline-flex; align-items: center; justify-content: center; min-height: 18px; padding: 2px 8px; border-radius: 999px; border: 1px solid rgba(0,204,255,.28); background: rgba(0,204,255,.08); color: var(--cyan); font: 700 10px 'DM Mono', monospace; white-space: nowrap; }
   .info-tip { width: 16px; height: 16px; border-radius: 999px; display: inline-grid; place-items: center; border: 1px solid rgba(0,204,255,.34); background: rgba(0,204,255,.10); color: var(--cyan); font: 700 10px 'DM Mono', monospace; cursor: help; flex: none; }
   .orders-sub { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
@@ -579,15 +587,17 @@
       <div class="orders-sub" id="ordersSub">New + scheduled ezCater coverage</div>
     </div>
     <div class="orders-controls">
-      <div class="orders-window-row" id="ordersWindowRow">
-        <label class="app-label" for="ordersWindow">Window</label>
-        <select id="ordersWindow" class="app-select">
-          <option value="12" selected>Next 12 hours</option>
-          <option value="24">Next 24 hours</option>
-        </select>
+      <div class="orders-action-row">
+        <div class="orders-window-row" id="ordersWindowRow">
+          <label class="app-label" for="ordersWindow">Window</label>
+          <select id="ordersWindow" class="app-select">
+            <option value="12" selected>Next 12 hours</option>
+            <option value="24">Next 24 hours</option>
+          </select>
+        </div>
+        <button class="app-btn" id="loadOrdersBtn">Load Orders</button>
+        <button class="app-btn secondary" id="clearOrdersBtn">Clear Orders</button>
       </div>
-      <button class="app-btn" id="loadOrdersBtn">Load Orders</button>
-      <button class="app-btn secondary" id="clearOrdersBtn" style="margin-top: 6px;">Clear Orders</button>
       <div class="loading-bar" id="ordersLoadingBar" aria-hidden="true"></div>
       <div class="status-msg" id="ordersStatus"></div>
       <div class="assign-banner" id="assignBanner"></div>
