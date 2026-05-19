@@ -1,7 +1,8 @@
 // /api/order-events.js
 // GET /api/order-events?orderIds=123,456
+// GET /api/order-events?orderId=123&details=1
 // Required header: X-Usertoken: <JWT from /api/auth>
-// Checks Skipcart order events for pickup_delay / "Order is still being prepared" alerts.
+// Checks Skipcart order events for pickup_delay alerts and can return normalized event details/trails.
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -20,29 +21,36 @@ export default async function handler(req, res) {
   ).trim();
   if (!userToken) return res.status(401).json({ error: 'Unauthorized', reason: 'no_user_token' });
 
-  const orderIds = String(req.query?.orderIds || '')
+  const detailsMode = truthy(req.query?.details) || String(req.query?.mode || '').toLowerCase() === 'details';
+  const singleOrderId = String(req.query?.orderId || '').trim();
+  const orderIds = String(req.query?.orderIds || singleOrderId || '')
     .split(',')
     .map(v => v.trim())
     .filter(v => /^\d+$/.test(v))
-    .slice(0, 60);
+    .slice(0, detailsMode ? 10 : 60);
 
   if (!orderIds.length) {
-    return res.status(400).json({ error: 'orderIds is required' });
+    return res.status(400).json({ error: detailsMode ? 'orderId is required' : 'orderIds is required' });
   }
 
   try {
-    const results = await mapLimit(orderIds, 6, async orderId => {
+    const results = await mapLimit(orderIds, detailsMode ? 3 : 6, async orderId => {
       try {
-        const events = await fetchOrderEvents(orderId, APPTOKEN, userToken);
-        const alert = findPickupDelayAlert(events, orderId);
-        return { orderId, alert, checked: true };
+        const rawEvents = await fetchOrderEvents(orderId, APPTOKEN, userToken);
+        const events = rawEvents.map(e => normalizeEvent(e, orderId));
+        const alert = findPickupDelayAlert(rawEvents, orderId);
+        return { orderId, alert, events: detailsMode ? events : undefined, checked: true };
       } catch (err) {
-        return { orderId, checked: false, error: err.message || 'event lookup failed' };
+        return { orderId, checked: false, error: err.message || 'event lookup failed', events: detailsMode ? [] : undefined };
       }
     });
 
     const alerts = results.map(r => r.alert).filter(Boolean);
     res.setHeader('Cache-Control', 'no-store');
+    if (detailsMode && orderIds.length === 1) {
+      const first = results[0] || { orderId: orderIds[0], events: [], checked: false };
+      return res.status(200).json({ status: true, orderId: first.orderId, events: first.events || [], alert: first.alert || null, checked: !!first.checked, error: first.error || null });
+    }
     return res.status(200).json({ status: true, checked: results.length, alerts, results });
   } catch (err) {
     console.error('[order-events] proxy error:', err);
@@ -57,6 +65,32 @@ async function fetchOrderEvents(orderId, appToken, userToken) {
   });
   const result = json?.Result || json?.result || [];
   return Array.isArray(result) ? result : [];
+}
+
+
+function normalizeEvent(e, fallbackOrderId) {
+  const eventDateTime = e.eventdatetime || e.EventDateTime || e.updatedon || e.UpdatedOn || null;
+  return {
+    eventId: String(e.eventid || e.EventId || ''),
+    eventName: String(e.eventname || e.EventName || ''),
+    eventDateTime,
+    updatedOn: e.updatedon || e.UpdatedOn || null,
+    jobId: String(e.jobid || e.JobId || ''),
+    driverId: String(e.driverid || e.DriverId || ''),
+    driverName: String(e.drivername || e.DriverName || ''),
+    orderId: String(e.orderid || e.OrderId || fallbackOrderId || ''),
+    exceptionalEvent: e.exceptionalevent || e.ExceptionalEvent || null,
+    latitude: toNumberOrNull(e.latitude || e.Latitude),
+    longitude: toNumberOrNull(e.longitude || e.Longitude),
+    eta: e.Eta || e.ETA || e.eta || null,
+    duration: e.duration || e.Duration || '',
+    webhookStatus: e.webhookstatus ?? e.WebhookStatus ?? null,
+    webhookDate: e.webhookdate || e.WebhookDate || null
+  };
+}
+
+function truthy(value) {
+  return /^(1|true|yes|y)$/i.test(String(value || '').trim());
 }
 
 function findPickupDelayAlert(events, fallbackOrderId) {
