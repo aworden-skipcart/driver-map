@@ -1,6 +1,7 @@
 // /api/zone-messages.js
 const MESSAGE_TEXT = 'Catering orders with high $$$ are waiting in your area! Go online now and check the Skipcart app before they’re accepted by another driver.';
 const MESSAGE_B64 = Buffer.from(MESSAGE_TEXT, 'utf8').toString('base64');
+const REGION_IDS = [54, 55, 56, 57, 58, 59, 60, 61, 62];
 
 export default async function handler(req, res) {
   const APPTOKEN = (process.env.SKIPCART_APPTOKEN || '').trim();
@@ -37,6 +38,15 @@ async function handleGet(req, res, appToken, userToken) {
     res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=900');
     return res.status(200).json({ status: true, action, areaId, zones });
   }
+  if (action === 'resolve-zone') {
+    const areaId = asSafeInt(req.query?.areaId, 'areaId', 1, 999999);
+    const zoneId = asSafeInt(req.query?.zoneId, 'zoneId', 1, 999999);
+    const areaName = String(req.query?.areaName || '').trim();
+    const zoneName = String(req.query?.zoneName || '').trim();
+    const resolved = await resolveRegionAreaZone({ appToken, userToken, areaId, zoneId, areaName, zoneName });
+    res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=900');
+    return res.status(200).json({ status: true, action, ...resolved });
+  }
   return res.status(400).json({ error: 'Invalid action' });
 }
 
@@ -55,6 +65,41 @@ async function handlePost(req, res, appToken, userToken) {
   res.setHeader('Cache-Control', 'no-store');
   return res.status(200).json({ status: true, messageText: MESSAGE_TEXT, filters: { regionId, areaId, zoneId }, results: { sms: summarizeSendResult(sms), notification: summarizeSendResult(notification) } });
 }
+
+
+async function resolveRegionAreaZone({ appToken, userToken, areaId, zoneId, areaName, zoneName }) {
+  let matchedRegionId = null;
+  let matchedArea = null;
+  for (const regionId of REGION_IDS) {
+    const upstream = await upstreamFetch(`https://live.skipcart.com/dash-api/v1api/region/areas/${regionId}`, { method: 'GET', appToken, userToken });
+    const data = parseMaybeJson(upstream.text);
+    const areas = Array.isArray(data?.Result) ? data.Result : Array.isArray(data) ? data : [];
+    matchedArea = areas.find(a => Number(a?.AreaId ?? a?.AreaID ?? a?.Id) === Number(areaId))
+      || (areaName ? areas.find(a => normalizeName(a?.AreaName || a?.Name) === normalizeName(areaName)) : null);
+    if (matchedArea) { matchedRegionId = regionId; break; }
+  }
+  if (!matchedRegionId) {
+    const err = new Error('Could not map that area to a Skipcart region.');
+    err.status = 400;
+    throw err;
+  }
+  let matchedZone = null;
+  try {
+    const zoneUpstream = await upstreamFetch(`https://live.skipcart.com/dash-api/v1api/Area/Zones/GetZonesByAreas/${areaId}`, { method: 'GET', appToken, userToken });
+    const zoneData = parseMaybeJson(zoneUpstream.text);
+    const zones = Array.isArray(zoneData?.Result) ? zoneData.Result : Array.isArray(zoneData) ? zoneData : [];
+    matchedZone = zones.find(z => Number(z?.ZoneId ?? z?.ZoneID ?? z?.Id) === Number(zoneId))
+      || (zoneName ? zones.find(z => normalizeName(z?.ZoneName || z?.Name) === normalizeName(zoneName)) : null);
+  } catch { matchedZone = null; }
+  return {
+    regionId: matchedRegionId,
+    areaId: Number(matchedArea?.AreaId ?? matchedArea?.AreaID ?? areaId),
+    areaName: String(matchedArea?.AreaName || matchedArea?.Name || areaName || areaId),
+    zoneId: Number(matchedZone?.ZoneId ?? matchedZone?.ZoneID ?? zoneId),
+    zoneName: String(matchedZone?.ZoneName || matchedZone?.Name || zoneName || zoneId)
+  };
+}
+function normalizeName(value) { return String(value || '').trim().toLowerCase().replace(/\s+/g, ' '); }
 
 async function upstreamFetch(url, { method, appToken, userToken, body }) {
   const r = await fetch(url, { method, headers: { 'Apptoken': appToken, 'UserToken': userToken, 'Content-Type': 'application/json', 'Accept': 'application/json, text/plain, */*', 'Origin': 'https://live.skipcart.com', 'Referer': 'https://live.skipcart.com/' }, body });
