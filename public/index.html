@@ -823,7 +823,6 @@
       </div>
       <div class="loading-bar" id="ordersLoadingBar" aria-hidden="true"></div>
       <div class="status-msg" id="ordersStatus"></div>
-      <div class="assign-banner" id="assignBanner"></div>
     </div>
     <div class="orders-list" id="ordersList">
       <div class="order-row" style="color: var(--muted); padding: 6px;">Load orders to map New ezCater pickups and scheduled-driver conflicts.</div>
@@ -844,7 +843,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script>
-const APP_VERSION = '2026.05.18.11';
+const APP_VERSION = '2026.05.18.12';
 window.APP_VERSION = APP_VERSION;
 
 function showVersionUpdateBanner() {
@@ -2916,16 +2915,8 @@ function setAssignMode(orderId) {
   if (order) preloadConflictChecksForAssignOrder(order);
 }
 function updateAssignBanner() {
-  const el = document.getElementById('assignBanner');
-  if (!el) return;
-  if (!selectedAssignOrderId || !orderModeAllowsAssign()) {
-    el.classList.remove('show');
-    el.textContent = '';
-    return;
-  }
-  const o = allOrders.find(x => String(x.orderId) === String(selectedAssignOrderId));
-  el.textContent = o ? `Assign mode: click an available Catering driver car. Drivers scheduled within ±1 hour of Order ${o.orderId} are hidden when the scheduled-conflict filter is on. Assign mode stays on until you click Done Assigning.` : '';
-  el.classList.toggle('show', !!o);
+  // Assign mode is now communicated inside the active order card only.
+  // The right Orders controls banner was removed to keep the panel compact.
 }
 function bindDriverPopupActions(marker) {
   loadCurrentDriverOrderForPopup(marker);
