@@ -136,6 +136,8 @@
   .zone-overlay-toggle:hover { color: var(--cyan); }
   .leaflet-tooltip.zone-map-tooltip { background: rgba(8,15,36,.96); border: 1px solid rgba(0,204,255,.40); color: var(--white); border-radius: 8px; box-shadow: 0 10px 24px rgba(0,0,0,.32); font-family: 'Barlow', sans-serif; font-size: 11px; font-weight: 800; letter-spacing: .02em; padding: 5px 8px; }
   .leaflet-tooltip.zone-map-tooltip::before { border-top-color: rgba(0,204,255,.40); }
+  .zone-message-card.prefill-pulse { animation: zonePrefillPulse .9s ease; }
+  @keyframes zonePrefillPulse { 0% { box-shadow: 0 0 0 0 rgba(0,204,255,.34); } 100% { box-shadow: 0 0 0 12px rgba(0,204,255,0); } }
   .region-all-btn { flex: none; min-height: 22px; padding: 0 10px; border-radius: 999px; border: 1px solid rgba(0,204,255,.28); background: rgba(0,204,255,.08); color: var(--cyan); font-family: 'Barlow Condensed', sans-serif; font-size: 10px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; cursor: pointer; }
   .region-all-btn:hover, .region-all-btn.active { background: var(--cyan); border-color: var(--cyan); color: #020617; }
   #sidebarToggle { position: absolute; top: 50%; left: 320px; transform: translateY(-50%); z-index: 930; width: 24px; height: 54px; border: 1px solid var(--border2); border-left: none; border-radius: 0 10px 10px 0; background: rgba(8,15,36,.95); color: var(--cyan); cursor: pointer; display: grid; place-items: center; box-shadow: 7px 0 18px rgba(0,0,0,.28); transition: left .18s ease, background .15s, border-color .15s; }
@@ -842,7 +844,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script>
-const APP_VERSION = '2026.05.18.10';
+const APP_VERSION = '2026.05.18.11';
 window.APP_VERSION = APP_VERSION;
 
 function showVersionUpdateBanner() {
@@ -1155,6 +1157,10 @@ function buildZoneOverlayLayer(data) {
       });
       layer.on('mouseover', () => layer.setStyle({ weight: 2, opacity: 0.9, fillOpacity: 0.11 }));
       layer.on('mouseout', () => zoneOverlayLayer && zoneOverlayLayer.resetStyle(layer));
+      layer.on('click', (evt) => {
+        if (evt?.originalEvent) L.DomEvent.stopPropagation(evt.originalEvent);
+        handleZoneOverlayClick(feature, layer);
+      });
     }
   });
 }
@@ -1525,6 +1531,78 @@ function updateZoneMessageSendState() {
 function selectedZoneMessageRegionId() {
   return String(document.getElementById('zoneMessageRegion')?.value || '58');
 }
+
+function setZoneMessageToolOpen(open = true) {
+  const toggle = document.getElementById('zoneMessageToggle');
+  const card = document.getElementById('zoneMessageCard');
+  if (!toggle || !card) return;
+  card.classList.toggle('show', !!open);
+  toggle.textContent = open ? 'Close Message Tool' : 'Open Message Tool';
+  if (open) {
+    card.classList.remove('prefill-pulse');
+    void card.offsetWidth;
+    card.classList.add('prefill-pulse');
+  }
+}
+function makeSingleOptionRow(idKey, labelKey, id, label) {
+  const row = {};
+  row[idKey] = id == null ? '' : String(id);
+  row[labelKey] = label == null ? String(id || '') : String(label);
+  return row;
+}
+async function resolveZoneMessageSelectionFromFeature(feature) {
+  const p = feature?.properties || {};
+  const areaId = p.AreaId ?? p.AreaID ?? p.areaId ?? p.area_id ?? '';
+  const zoneId = p.ZoneId ?? p.ZoneID ?? p.zoneId ?? p.zone_id ?? '';
+  const areaName = p.AreaName || p.Area_Name || p.areaName || '';
+  const zoneName = p.ZoneName || p.Zone_Name || p.zoneName || '';
+  if (!areaId || !zoneId) throw new Error('This zone is missing Area or Zone IDs.');
+  const params = new URLSearchParams({ action: 'resolve-zone', areaId: String(areaId), zoneId: String(zoneId), areaName, zoneName });
+  const data = await fetchZoneMessageJson('/api/zone-messages?' + params.toString());
+  return {
+    regionId: String(data.regionId || data.region?.RegionId || data.region?.Id || ''),
+    areaId: String(data.areaId || areaId),
+    areaName: String(data.areaName || areaName || areaId),
+    zoneId: String(data.zoneId || zoneId),
+    zoneName: String(data.zoneName || zoneName || zoneId)
+  };
+}
+async function prefillZoneMessageFromFeature(feature) {
+  const regionSelect = document.getElementById('zoneMessageRegion');
+  const areaSelect = document.getElementById('zoneMessageArea');
+  const zoneSelect = document.getElementById('zoneMessageZone');
+  const confirm = document.getElementById('zoneMessageConfirm');
+  if (!regionSelect || !areaSelect || !zoneSelect) return;
+  setZoneMessageToolOpen(true);
+  if (confirm) confirm.checked = false;
+  areaSelect.disabled = true;
+  zoneSelect.disabled = true;
+  populateSelect(areaSelect, [], 'AreaId', 'AreaName', 'Resolving area…');
+  populateSelect(zoneSelect, [], 'ZoneId', 'ZoneName', 'Resolving zone…');
+  updateZoneMessageSendState();
+  setZoneMessageStatus('Resolving region, area, and zone from the map selection…', 'info');
+  try {
+    const resolved = await resolveZoneMessageSelectionFromFeature(feature);
+    if (!resolved.regionId) throw new Error('Could not match this zone to a Skipcart region.');
+    regionSelect.value = resolved.regionId;
+    populateSelect(areaSelect, [makeSingleOptionRow('AreaId', 'AreaName', resolved.areaId, resolved.areaName)], 'AreaId', 'AreaName', 'Select an area');
+    areaSelect.value = resolved.areaId;
+    areaSelect.disabled = false;
+    populateSelect(zoneSelect, [makeSingleOptionRow('ZoneId', 'ZoneName', resolved.zoneId, resolved.zoneName)], 'ZoneId', 'ZoneName', 'Select a zone');
+    zoneSelect.value = resolved.zoneId;
+    zoneSelect.disabled = false;
+    setZoneMessageStatus(`Selected ${resolved.zoneName} in ${regionNameFromId(resolved.regionId)}. Check the confirmation box to send.`, 'success');
+    updateZoneMessageSendState();
+  } catch (err) {
+    setZoneMessageStatus(err.message || 'Could not map this zone to the message tool.', 'error');
+    updateZoneMessageSendState();
+  }
+}
+function handleZoneOverlayClick(feature, layer) {
+  if (!feature?.properties) return;
+  if (layer && typeof layer.setStyle === 'function') layer.setStyle({ weight: 3, opacity: 1, fillOpacity: 0.15 });
+  prefillZoneMessageFromFeature(feature);
+}
 function populateSelect(el, rows, valueKey, labelKey, placeholder) {
   if (!el) return;
   el.innerHTML = `<option value="">${escapeHtml(placeholder || 'Select')}</option>`;
@@ -1615,7 +1693,7 @@ function bindZoneMessageEvents() {
   const region = document.getElementById('zoneMessageRegion'); const area = document.getElementById('zoneMessageArea'); const zone = document.getElementById('zoneMessageZone');
   const confirm = document.getElementById('zoneMessageConfirm'); const reset = document.getElementById('zoneMessageReset'); const send = document.getElementById('zoneMessageSend');
   if (!toggle || !card) return;
-  toggle.addEventListener('click', () => { const open = !card.classList.contains('show'); card.classList.toggle('show', open); toggle.textContent = open ? 'Close Message Tool' : 'Open Message Tool'; if (open && area && area.options.length <= 1) loadZoneMessageAreas(); });
+  toggle.addEventListener('click', () => { const open = !card.classList.contains('show'); setZoneMessageToolOpen(open); if (open && area && area.options.length <= 1) loadZoneMessageAreas(); });
   region?.addEventListener('change', () => { resetZoneMessageTool(); loadZoneMessageAreas(); });
   area?.addEventListener('change', loadZoneMessageZones);
   zone?.addEventListener('change', updateZoneMessageSendState);
