@@ -297,8 +297,8 @@
   .v1-head {
     position: relative;
     display: block;
-    margin-bottom: 12px;
-    min-height: 44px;
+    margin-bottom: 2px;
+    min-height: 0;
     padding-right: 142px;
   }
   .v1-head > div:first-child { min-width: 0; }
@@ -312,13 +312,20 @@
     display: flex;
     flex-direction: column;
     align-items: flex-end;
-    gap: 4px;
+    gap: 2px;
     pointer-events: auto;
   }
   .v1-region { font-size: 10px; padding: 3px 9px; border-radius: 999px; background: rgba(0,204,255,.12); color: var(--cyan); border: 1px solid rgba(0,204,255,.25); white-space: nowrap; font-family: 'DM Mono', monospace; }
   .v1-zone { font-size: 10px; color: var(--muted); font-family: 'DM Mono', monospace; white-space: nowrap; max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
 
-  .v1-rail { position: relative; padding: 2px 0 2px 18px; margin: 10px 0 12px; border-left: 1.5px solid rgba(148,163,184,.28); }
+  .v1-timeline-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 74px;
+    align-items: end;
+    column-gap: 8px;
+    margin: 2px 0 8px;
+  }
+  .v1-rail { position: relative; min-width: 0; padding: 2px 0 2px 18px; margin: 0; border-left: 1.5px solid rgba(148,163,184,.28); }
   .v1-stop { position: relative; padding: 5px 0; }
   .v1-stop::before { content: ''; position: absolute; left: -23px; top: 10px; width: 9px; height: 9px; border-radius: 50%; background: var(--panel-2); border: 1.5px solid var(--muted); }
   .v1-stop.pickup::before { border-color: var(--cyan); background: var(--cyan); }
@@ -596,7 +603,17 @@
 
 
   .order-driver-line-actions { display: inline-flex; align-items: center; gap: 6px; flex: none; }
-  .order-card-action-strip { display: flex; align-items: center; justify-content: flex-end; gap: 7px; margin: -2px 0 9px; min-height: 26px; }
+  .order-card-action-strip {
+    width: 74px;
+    min-width: 74px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+    gap: 0;
+    margin: 0 0 1px;
+    min-height: 24px;
+    align-self: end;
+  }
   .trail-toggle {
     min-height: 24px;
     display: inline-flex;
@@ -905,7 +922,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script>
-const APP_VERSION = '2026.05.18.15';
+const APP_VERSION = '2026.05.18.17';
 window.APP_VERSION = APP_VERSION;
 
 function showVersionUpdateBanner() {
@@ -2903,18 +2920,19 @@ function renderOrdersList() {
           </div>
         </div>
 
-        <div class="v1-rail">
-          <div class="v1-stop pickup">
-            <div class="v1-stop-label">Pickup<span class="v1-stop-time-inline">— ${escapeHtml(fmtDateTime(o.delWindowStart))}</span></div>
-            <div class="v1-stop-name">${escapeHtml(pickupName)}</div>
+        <div class="v1-timeline-row">
+          <div class="v1-rail">
+            <div class="v1-stop pickup">
+              <div class="v1-stop-label">Pickup<span class="v1-stop-time-inline">— ${escapeHtml(fmtDateTime(o.delWindowStart))}</span></div>
+              <div class="v1-stop-name">${escapeHtml(pickupName)}</div>
+            </div>
+            <div class="v1-stop drop">
+              <div class="v1-stop-label">Dropoff<span class="v1-stop-time-inline">— ${escapeHtml(fmtDateTime(o.delWindowEnd))}</span></div>
+              <div class="v1-stop-name">${escapeHtml(dropName)}</div>
+            </div>
           </div>
-          <div class="v1-stop drop">
-            <div class="v1-stop-label">Dropoff<span class="v1-stop-time-inline">— ${escapeHtml(fmtDateTime(o.delWindowEnd))}</span></div>
-            <div class="v1-stop-name">${escapeHtml(dropName)}</div>
-          </div>
+          ${actionStrip}
         </div>
-
-        ${actionStrip}
 
         <div class="v1-money">
           <div class="v1-money-cell"><div class="v1-money-label">Order cost</div><div class="v1-money-value">${escapeHtml(fmtMoney(o.orderCost, o.orderCostCurrency))}</div></div>
