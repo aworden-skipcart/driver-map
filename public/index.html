@@ -594,6 +594,49 @@
   }
   .version-update-dismiss:hover { color: var(--text); border-color: rgba(0,204,255,.42); }
 
+
+  .order-driver-line-actions { display: inline-flex; align-items: center; gap: 6px; flex: none; }
+  .order-card-action-strip { display: flex; align-items: center; justify-content: flex-end; gap: 7px; margin: -2px 0 9px; min-height: 26px; }
+  .trail-toggle {
+    min-height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    border-radius: 999px;
+    border: 1px solid rgba(0,204,255,.28);
+    background: rgba(0,204,255,.08);
+    color: var(--cyan);
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    cursor: pointer;
+    padding: 0 8px;
+    white-space: nowrap;
+  }
+  .trail-toggle:hover, .trail-toggle.active { background: var(--cyan); color: #020617; border-color: var(--cyan); }
+  .trail-toggle svg { width: 14px; height: 14px; flex: none; }
+  .event-details-overlay { position: fixed; inset: 0; z-index: 1200; display: none; place-items: center; padding: 24px; background: rgba(2,6,23,.62); backdrop-filter: blur(5px); }
+  .event-details-overlay.show { display: grid; }
+  .event-details-panel { width: min(980px, calc(100vw - 32px)); max-height: min(740px, calc(100vh - 40px)); display: flex; flex-direction: column; overflow: hidden; border-radius: 18px; border: 1px solid rgba(0,204,255,.30); background: rgba(8,15,36,.98); box-shadow: 0 28px 70px rgba(0,0,0,.55), 0 0 0 1px rgba(0,204,255,.06) inset; }
+  .event-details-head { padding: 14px 16px; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--border2); background: linear-gradient(135deg, rgba(0,204,255,.10), transparent); }
+  .event-details-title { color: var(--cyan); font-family: 'Barlow Condensed', sans-serif; font-size: 14px; font-weight: 900; letter-spacing: .16em; text-transform: uppercase; }
+  .event-details-sub { color: var(--muted); font: 10px 'DM Mono', monospace; margin-top: 3px; }
+  .event-details-close { width: 30px; height: 30px; border-radius: 10px; border: 1px solid var(--border2); background: rgba(0,0,0,.24); color: var(--muted); cursor: pointer; }
+  .event-details-close:hover { color: var(--white); border-color: rgba(0,204,255,.45); }
+  .event-details-body { overflow: auto; padding: 12px; }
+  .event-details-table { width: 100%; border-collapse: separate; border-spacing: 0 6px; font-size: 11px; }
+  .event-details-table th { position: sticky; top: 0; z-index: 1; text-align: left; color: var(--muted); font-size: 9px; letter-spacing: .10em; text-transform: uppercase; background: rgba(8,15,36,.98); padding: 6px 8px; }
+  .event-details-table td { padding: 8px; background: rgba(0,0,0,.20); border-top: 1px solid rgba(148,163,184,.10); border-bottom: 1px solid rgba(148,163,184,.10); vertical-align: top; }
+  .event-details-table td:first-child { border-left: 1px solid rgba(148,163,184,.10); border-radius: 9px 0 0 9px; }
+  .event-details-table td:last-child { border-right: 1px solid rgba(148,163,184,.10); border-radius: 0 9px 9px 0; }
+  .event-name-cell { color: var(--white); font-weight: 800; }
+  .event-exception-cell { color: #fde68a; }
+  .event-muted { color: var(--muted); font-family: 'DM Mono', monospace; }
+  .event-trail-dot { width: 10px; height: 10px; border-radius: 999px; background: #f59e0b; border: 2px solid #fff; box-shadow: 0 0 0 3px rgba(245,158,11,.18); }
+
   @keyframes pickupDelayRipple {
     0% { transform: scale(.78); opacity: .95; }
     70% { transform: scale(1.75); opacity: .18; }
@@ -862,7 +905,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script>
-const APP_VERSION = '2026.05.18.14';
+const APP_VERSION = '2026.05.18.15';
 window.APP_VERSION = APP_VERSION;
 
 function showVersionUpdateBanner() {
@@ -991,7 +1034,7 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
   }
 });
 
-let map, cluster, orderLayer, routeLayer, currentJobLayer, zoneOverlayLayer,
+let map, cluster, orderLayer, routeLayer, currentJobLayer, eventTrailLayer, zoneOverlayLayer,
     allFeatures = [], allMarkers = [], allOrders = [], scheduledOrders = [],
     orderMarkers = [], selectedAssignOrderId = null, openFeeOrderId = null, lastFeeUpdate = null, autoRefreshTimer = null, orderStatsTimer = null, pickupDelayTimer = null, orderStatsSummary = null, currentOrderMode = 'unassigned';
 let zoneOverlayData = null;
@@ -1010,10 +1053,13 @@ let weatherLoopIndex = 0;
 let weatherMode = 'off';
 let weatherClockTimer = null;
 let circleOfferTool = { active: false, orderId: null, radiusMiles: 5, ghostCircle: null, pendingCircle: null, locked: false, executing: false, confirmModal: null };
+let activeTrailOrderId = null;
 
 const attemptedOffersByOrder = new Map();
 const currentOrderDetailsCache = new Map();
 const currentOrderDetailsFetches = new Map();
+const orderEventDetailsCache = new Map();
+const orderEventDetailsFetches = new Map();
 let assignConflictCheckRun = 0;
 const pickupDelayAlertsByOrder = new Map();
 const dismissedPickupDelayAlerts = new Set(JSON.parse(localStorage.getItem('sc_dismissed_pickup_delay_alerts') || '[]'));
@@ -1127,6 +1173,7 @@ function initMap() {
   orderLayer = L.layerGroup().addTo(map);
   routeLayer = L.layerGroup().addTo(map);
   currentJobLayer = L.layerGroup().addTo(map);
+  eventTrailLayer = L.layerGroup().addTo(map);
 }
 
 function zoneOverlayStyle(feature) {
@@ -2642,6 +2689,8 @@ function hideOrderFromPanelUntilReload(orderId) {
 
   if (routeLayer) routeLayer.clearLayers();
   if (currentJobLayer) currentJobLayer.clearLayers();
+  if (eventTrailLayer) eventTrailLayer.clearLayers();
+  activeTrailOrderId = null;
   mapOrders({ preserveView: true });
   renderOrdersList();
   rebuildMarkers();
@@ -2665,6 +2714,8 @@ function clearOrders() {
   if (orderLayer) orderLayer.clearLayers();
   if (routeLayer) routeLayer.clearLayers();
   if (currentJobLayer) currentJobLayer.clearLayers();
+  if (eventTrailLayer) eventTrailLayer.clearLayers();
+  activeTrailOrderId = null;
   setOrdersInfoDetail(`${getOrderModeConfig().label} ezCater orders`);
   document.getElementById('ordersList').innerHTML = `<div class="order-row" style="color: var(--muted); padding: 6px;">${escapeHtml(getOrderModeConfig().initial)}</div>`;
   setOrdersStatus('', '');
@@ -2829,9 +2880,14 @@ function renderOrdersList() {
     const assignedDriverLabel = assignedDriverName || (assignedDriverId ? 'Assigned driver' : 'No assigned driver returned');
     const pickupDelayAlert = getActivePickupDelayAlertForOrder(o.orderId);
     const pickupDelayNote = pickupDelayAlert ? `<div class="pickup-delay-note"><span>⚠️</span><span><strong>Pickup Delay:</strong> ${escapeHtml(pickupDelayAlert.message || 'Order is still being prepared')}</span></div>` : '';
+    const canTrail = currentOrderMode === 'in-progress' && assignedDriverId && o.orderId;
+    const canDetails = (currentOrderMode === 'in-progress' || currentOrderMode === 'completed') && o.orderId;
+    const trailButton = canTrail ? `<button type="button" class="trail-toggle ${String(activeTrailOrderId || '') === String(o.orderId) ? 'active' : ''}" data-action="toggle-trail" data-order-id="${escapeHtml(o.orderId)}" aria-label="Toggle breadcrumb trail"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M12 19h4.5a3.5 3.5 0 0 0 0 -7h-8a3.5 3.5 0 0 1 0 -7h3.5"/></svg><span>Trail</span></button>` : '';
+    const detailsButton = canDetails ? `<button type="button" class="trail-toggle" data-action="event-details" data-order-id="${escapeHtml(o.orderId)}" aria-label="Open event details"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8l0 4l2 2"/><path d="M3.05 11a9 9 0 1 1 .5 4m-.5 5v-5h5"/></svg><span>Details</span></button>` : '';
     const assignedDriverLine = assignedDriverId
-      ? `<div class="order-driver-line"><span><strong>Assigned Driver:</strong> ${escapeHtml(assignedDriverLabel)}</span><a class="driver-id-link" href="${driverProfileUrl(assignedDriverId)}" target="_blank" rel="noopener noreferrer">#${escapeHtml(assignedDriverId)}</a></div>`
-      : `<div class="order-driver-line"><span><strong>Assigned Driver:</strong> <span class="order-driver-empty">${escapeHtml(assignedDriverLabel)}</span></span></div>`;
+      ? `<div class="order-driver-line"><span><strong>Assigned Driver:</strong> ${escapeHtml(assignedDriverLabel)}</span><span class="order-driver-line-actions"><a class="driver-id-link" href="${driverProfileUrl(assignedDriverId)}" target="_blank" rel="noopener noreferrer">#${escapeHtml(assignedDriverId)}</a>${trailButton}</span></div>`
+      : `<div class="order-driver-line"><span><strong>Assigned Driver:</strong> <span class="order-driver-empty">${escapeHtml(assignedDriverLabel)}</span></span>${trailButton ? `<span class="order-driver-line-actions">${trailButton}</span>` : ''}</div>`;
+    const actionStrip = detailsButton ? `<div class="order-card-action-strip">${detailsButton}</div>` : '';
     const feeStatus = justUpdated ? `<div class="v1-fee-status success"><i class="ti ti-circle-check" aria-hidden="true"></i><span>${escapeHtml(lastFeeUpdate.message || '')}</span></div>` : '';
     return `
       <div class="order-card ${activeAssign ? 'active' : ''} ${pickupDelayAlert ? 'pickup-delay-alert' : ''}" data-order-id="${escapeHtml(o.orderId)}">
@@ -2857,6 +2913,8 @@ function renderOrdersList() {
             <div class="v1-stop-name">${escapeHtml(dropName)}</div>
           </div>
         </div>
+
+        ${actionStrip}
 
         <div class="v1-money">
           <div class="v1-money-cell"><div class="v1-money-label">Order cost</div><div class="v1-money-value">${escapeHtml(fmtMoney(o.orderCost, o.orderCostCurrency))}</div></div>
@@ -2952,6 +3010,19 @@ function renderOrdersList() {
       startCircleOfferTool(id, Number(radiusSel?.value || 5));
     });
   });
+
+  list.querySelectorAll('[data-action="toggle-trail"]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleEventTrail(btn.dataset.orderId);
+    });
+  });
+  list.querySelectorAll('[data-action="event-details"]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openEventDetails(btn.dataset.orderId);
+    });
+  });
   list.querySelectorAll('[data-action="open-fee"]').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -3007,6 +3078,122 @@ function cateringDriverOptions() {
     .join('');
 }
 
+
+
+function eventTimeMs(event) {
+  return dateMs(event?.eventDateTime || event?.EventDateTime || event?.updatedOn || event?.UpdatedOn);
+}
+function eventLatLng(event) {
+  const lat = Number(event?.latitude ?? event?.Latitude);
+  const lng = Number(event?.longitude ?? event?.Longitude);
+  return Number.isFinite(lat) && Number.isFinite(lng) ? [lat, lng] : null;
+}
+function eventLabel(event) {
+  const name = event?.eventName || event?.EventName || 'Event';
+  const time = fmtDateTime(event?.eventDateTime || event?.EventDateTime || event?.updatedOn || event?.UpdatedOn);
+  const ex = event?.exceptionalEvent || event?.ExceptionalEvent || '';
+  return `${name} · ${time}${ex ? ' · ' + ex : ''}`;
+}
+async function fetchOrderEventDetails(orderId) {
+  const id = String(orderId || '').trim();
+  if (!id) throw new Error('Missing order ID.');
+  const cached = orderEventDetailsCache.get(id);
+  if (cached && Date.now() - cached.fetchedAt < 2 * 60 * 1000) return cached.events;
+  if (orderEventDetailsFetches.has(id)) return orderEventDetailsFetches.get(id);
+  const p = (async () => {
+    const params = new URLSearchParams({ orderId: id, details: '1' });
+    const r = await fetch(`/api/order-events?${params.toString()}`, { headers: { 'X-Usertoken': Session.userToken, 'Accept': 'application/json' } });
+    const json = await r.json().catch(() => ({}));
+    if (!r.ok || json.status === false) throw new Error(json.error || `Order events request failed (${r.status})`);
+    const events = Array.isArray(json.events) ? json.events : [];
+    events.sort((a, b) => (eventTimeMs(a) || 0) - (eventTimeMs(b) || 0));
+    orderEventDetailsCache.set(id, { fetchedAt: Date.now(), events });
+    return events;
+  })().finally(() => orderEventDetailsFetches.delete(id));
+  orderEventDetailsFetches.set(id, p);
+  return p;
+}
+function clearEventTrail() {
+  if (eventTrailLayer) eventTrailLayer.clearLayers();
+  activeTrailOrderId = null;
+  document.querySelectorAll('[data-action="toggle-trail"]').forEach(btn => btn.classList.remove('active'));
+}
+async function toggleEventTrail(orderId) {
+  const id = String(orderId || '').trim();
+  if (!id) return;
+  if (String(activeTrailOrderId || '') === id) {
+    clearEventTrail();
+    setOrdersStatus(`Event trail hidden for Order ${id}.`, 'info');
+    return;
+  }
+  if (!eventTrailLayer) return;
+  eventTrailLayer.clearLayers();
+  activeTrailOrderId = id;
+  document.querySelectorAll('[data-action="toggle-trail"]').forEach(btn => btn.classList.toggle('active', String(btn.dataset.orderId || '') === id));
+  setOrdersStatus(`Loading event trail for Order ${id}…`, 'info');
+  try {
+    const events = await fetchOrderEventDetails(id);
+    if (String(activeTrailOrderId || '') !== id) return;
+    const points = events.map(e => ({ event: e, ll: eventLatLng(e) })).filter(x => x.ll);
+    if (!points.length) {
+      setOrdersStatus(`No event latitude/longitude found for Order ${id}.`, 'info');
+      return;
+    }
+    const latLngs = points.map(x => x.ll);
+    L.polyline(latLngs, { color: '#f59e0b', weight: 2, opacity: .85, dashArray: '3 7' }).bindTooltip(`Event breadcrumb trail · Order ${id}`, { sticky: true }).addTo(eventTrailLayer);
+    points.forEach((x, idx) => {
+      const marker = L.circleMarker(x.ll, { radius: 4, color: '#f59e0b', weight: 1.5, fillColor: '#f59e0b', fillOpacity: .85, opacity: .95 });
+      marker.bindTooltip(`${idx + 1}. ${escapeHtml(eventLabel(x.event))}`, { direction: 'top', sticky: true });
+      marker.bindPopup(`<div class="popup-content"><div class="popup-name">${escapeHtml(x.event.eventName || 'Event')}</div><div class="popup-row"><strong>Time</strong> ${escapeHtml(fmtDateTime(x.event.eventDateTime))}</div>${x.event.exceptionalEvent ? `<div class="popup-row"><strong>Exception</strong> ${escapeHtml(x.event.exceptionalEvent)}</div>` : ''}<div class="popup-row"><strong>Lat/Lng</strong> ${escapeHtml(x.ll[0].toFixed(6))}, ${escapeHtml(x.ll[1].toFixed(6))}</div></div>`);
+      marker.addTo(eventTrailLayer);
+    });
+    const bounds = L.latLngBounds(latLngs);
+    if (bounds.isValid()) map.fitBounds(bounds, { padding: [55, 55], maxZoom: 14 });
+    setOrdersStatus(`${points.length.toLocaleString()} event breadcrumb point${points.length === 1 ? '' : 's'} loaded for Order ${id}.`, 'success');
+  } catch (err) {
+    clearEventTrail();
+    setOrdersStatus('Event trail error: ' + (err.message || 'Could not load order events.'), 'error');
+  }
+}
+function ensureEventDetailsModal() {
+  let overlay = document.getElementById('eventDetailsOverlay');
+  if (overlay) return overlay;
+  overlay = document.createElement('div');
+  overlay.id = 'eventDetailsOverlay';
+  overlay.className = 'event-details-overlay';
+  overlay.innerHTML = `<div class="event-details-panel" role="dialog" aria-modal="true" aria-labelledby="eventDetailsTitle"><div class="event-details-head"><div><div class="event-details-title" id="eventDetailsTitle">Order Events</div><div class="event-details-sub" id="eventDetailsSub">—</div></div><button type="button" class="event-details-close" id="eventDetailsClose" aria-label="Close event details">×</button></div><div class="event-details-body" id="eventDetailsBody"></div></div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeEventDetailsModal(); });
+  overlay.querySelector('#eventDetailsClose')?.addEventListener('click', closeEventDetailsModal);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && overlay.classList.contains('show')) closeEventDetailsModal(); });
+  return overlay;
+}
+function closeEventDetailsModal() {
+  document.getElementById('eventDetailsOverlay')?.classList.remove('show');
+}
+function renderEventDetailsTable(events) {
+  if (!events.length) return '<div class="order-row" style="padding: 8px;color: var(--muted);">No events returned for this order.</div>';
+  return `<table class="event-details-table"><thead><tr><th>Time</th><th>Event</th><th>Exceptional Event</th><th>Driver</th><th>Lat/Lng</th><th>Duration</th></tr></thead><tbody>${events.slice().reverse().map(e => {
+    const ll = eventLatLng(e);
+    return `<tr><td class="event-muted">${escapeHtml(fmtDateTime(e.eventDateTime))}</td><td class="event-name-cell">${escapeHtml(e.eventName || '—')}</td><td class="event-exception-cell">${escapeHtml(e.exceptionalEvent || '—')}</td><td>${escapeHtml(e.driverName || '—')}${e.driverId ? `<div class="event-muted">#${escapeHtml(e.driverId)}</div>` : ''}</td><td class="event-muted">${ll ? `${escapeHtml(ll[0].toFixed(6))}<br>${escapeHtml(ll[1].toFixed(6))}` : '—'}</td><td class="event-muted">${escapeHtml(e.duration || '—')}</td></tr>`;
+  }).join('')}</tbody></table>`;
+}
+async function openEventDetails(orderId) {
+  const id = String(orderId || '').trim();
+  if (!id) return;
+  const overlay = ensureEventDetailsModal();
+  overlay.querySelector('#eventDetailsTitle').textContent = 'Order Events';
+  overlay.querySelector('#eventDetailsSub').textContent = `Order ${id}`;
+  overlay.querySelector('#eventDetailsBody').innerHTML = '<div class="order-row" style="padding: 8px;color: var(--muted);">Loading event details…</div>';
+  overlay.classList.add('show');
+  try {
+    const events = await fetchOrderEventDetails(id);
+    overlay.querySelector('#eventDetailsSub').textContent = `Order ${id} · ${events.length.toLocaleString()} event${events.length === 1 ? '' : 's'}`;
+    overlay.querySelector('#eventDetailsBody').innerHTML = renderEventDetailsTable(events);
+  } catch (err) {
+    overlay.querySelector('#eventDetailsBody').innerHTML = `<div class="order-row" style="padding: 8px;color: var(--danger);">${escapeHtml(err.message || 'Could not load event details.')}</div>`;
+  }
+}
 
 function normalizedOrderStatus(value) {
   return String(value || '').trim().toLowerCase().replace(/[_\s-]+/g, ' ');
@@ -3064,6 +3251,7 @@ function selectOrder(orderId, pan) {
   document.querySelectorAll('.order-card').forEach(c => c.classList.toggle('active', String(c.dataset.orderId) === String(orderId)));
   scrollOrderCardIntoView(orderId);
   routeLayer.clearLayers();
+  if (activeTrailOrderId && String(activeTrailOrderId) !== String(orderId)) clearEventTrail();
 
   let orderLine = null;
   if (orderHasPickup(o) && orderHasDropoff(o)) {
