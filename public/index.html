@@ -276,6 +276,14 @@
   .order-card:hover, .order-card.active { border-color: rgba(0,204,255,0.48); box-shadow: 0 12px 30px rgba(0,0,0,.28), 0 0 0 1px rgba(0,204,255,0.12) inset; }
   .order-card:hover { background: linear-gradient(180deg, rgba(14,26,58,.98), rgba(9,17,40,.98)); }
   .order-card.active::before { opacity: 1; }
+  .order-card.pickup-delay-alert {
+    background: linear-gradient(180deg, rgba(52,38,13,.98), rgba(18,20,22,.98));
+    border-color: rgba(250,204,21,.38);
+    box-shadow: 0 12px 30px rgba(0,0,0,.30), 0 0 0 1px rgba(250,204,21,.10) inset;
+  }
+  .order-card.pickup-delay-alert::before { background: linear-gradient(180deg, #facc15, rgba(250,204,21,.22)); opacity: 1; }
+  .pickup-delay-note { margin-top: 9px; padding: 8px 10px; border-radius: 9px; background: rgba(250,204,21,.10); border: 1px solid rgba(250,204,21,.24); color: #facc15; font-size: 10px; line-height: 1.35; display: flex; gap: 7px; align-items: flex-start; }
+  .pickup-delay-note strong { color: #fde68a; font-weight: 900; }
 
   .order-driver-line { margin-top: 10px; padding: 8px 10px; border-radius: 9px; background: rgba(0,0,0,.16); border: 1px solid rgba(148,163,184,.12); color: var(--muted); font-size: 10px; line-height: 1.35; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   .order-driver-line strong { color: var(--text); font-weight: 800; }
@@ -478,6 +486,12 @@
   .driver-car-marker.offline { background: #6b7280; color: #e5e7eb; }
   .driver-car-marker.tried { background: #f9a8d4; color: #3b0a24; box-shadow: 0 0 0 5px rgba(249,168,212,.26), 0 0 22px rgba(249,168,212,.28), 0 8px 18px rgba(0,0,0,.35); }
   .driver-car-marker.assignable { box-shadow: 0 0 0 5px rgba(0,204,255,.28), 0 0 22px rgba(0,204,255,.28), 0 8px 18px rgba(0,0,0,.35); }
+  .driver-car-marker.pickup-delay-alert { position: relative; background: #facc15; color: #1f1600; box-shadow: 0 0 0 5px rgba(250,204,21,.22), 0 0 22px rgba(250,204,21,.32), 0 8px 18px rgba(0,0,0,.35); }
+  .driver-car-marker.pickup-delay-alert::after { content: ''; position: absolute; inset: -7px; border-radius: 999px; border: 2px solid rgba(250,204,21,.76); animation: pickupDelayRipple 1.35s ease-out infinite; pointer-events: none; }
+  .pickup-delay-popup { margin-top: 9px; padding: 9px 10px; border-radius: 10px; background: rgba(250,204,21,.10); border: 1px solid rgba(250,204,21,.28); color: #facc15; font-size: 11px; line-height: 1.35; }
+  .pickup-delay-popup-title { color: #fde68a; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; font-size: 10px; margin-bottom: 4px; }
+  .pickup-delay-dismiss { margin-top: 8px; width: 100%; min-height: 26px; border-radius: 8px; border: 1px solid rgba(250,204,21,.36); background: rgba(250,204,21,.14); color: #fde68a; font-family: 'Barlow Condensed', sans-serif; font-size: 11px; font-weight: 900; letter-spacing: .10em; text-transform: uppercase; cursor: pointer; }
+  .pickup-delay-dismiss:hover { background: rgba(250,204,21,.25); color: #fff7cc; }
   .order-pin { background: var(--cyan); color: #020617; border: 2px solid #fff; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 12px; box-shadow: 0 0 0 4px rgba(0,204,255,.18); }
   .drop-pin { background: var(--danger); color: #020617; border: 2px solid #fff; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 10px; }
   .popup-link { color: var(--cyan); text-decoration: none; }
@@ -534,8 +548,8 @@
   .popup-status.offline { background: rgba(107,114,128,0.2); color: #9ca3af; }
   .popup-status.on-job { background: rgba(245,158,11,0.15); color: var(--on-job); }
 
-  .marker-cluster-small, .marker-cluster-medium, .marker-cluster-large { background: rgba(0,204,255,0.2); }
-  .marker-cluster-small div, .marker-cluster-medium div, .marker-cluster-large div { background: rgba(0,204,255,0.6); color: #020617; font-family: 'Barlow Condensed', sans-serif; font-weight: 800; }
+  .marker-cluster-small, .marker-cluster-medium, .marker-cluster-large { background: rgba(71,85,105,0.28); }
+  .marker-cluster-small div, .marker-cluster-medium div, .marker-cluster-large div { background: rgba(100,116,139,0.82); color: #E2E8F0; font-family: 'Barlow Condensed', sans-serif; font-weight: 800; border: 1px solid rgba(203,213,225,.22); }
 
 
   .version-update-banner {
@@ -580,6 +594,11 @@
   }
   .version-update-dismiss:hover { color: var(--text); border-color: rgba(0,204,255,.42); }
 
+  @keyframes pickupDelayRipple {
+    0% { transform: scale(.78); opacity: .95; }
+    70% { transform: scale(1.75); opacity: .18; }
+    100% { transform: scale(2.05); opacity: 0; }
+  }
   @keyframes loadingSlide { from { transform: translateX(-120%); } to { transform: translateX(260%); } }
   @keyframes spin { to { transform: rotate(360deg); } }
   @keyframes fadeDown { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: translateY(0); } }
@@ -843,7 +862,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script>
-const APP_VERSION = '2026.05.18.12';
+const APP_VERSION = '2026.05.18.14';
 window.APP_VERSION = APP_VERSION;
 
 function showVersionUpdateBanner() {
@@ -974,7 +993,7 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
 
 let map, cluster, orderLayer, routeLayer, currentJobLayer, zoneOverlayLayer,
     allFeatures = [], allMarkers = [], allOrders = [], scheduledOrders = [],
-    orderMarkers = [], selectedAssignOrderId = null, openFeeOrderId = null, lastFeeUpdate = null, autoRefreshTimer = null, orderStatsTimer = null, orderStatsSummary = null, currentOrderMode = 'unassigned';
+    orderMarkers = [], selectedAssignOrderId = null, openFeeOrderId = null, lastFeeUpdate = null, autoRefreshTimer = null, orderStatsTimer = null, pickupDelayTimer = null, orderStatsSummary = null, currentOrderMode = 'unassigned';
 let zoneOverlayData = null;
 let zoneOverlayLoadPromise = null;
 
@@ -996,6 +1015,9 @@ const attemptedOffersByOrder = new Map();
 const currentOrderDetailsCache = new Map();
 const currentOrderDetailsFetches = new Map();
 let assignConflictCheckRun = 0;
+const pickupDelayAlertsByOrder = new Map();
+const dismissedPickupDelayAlerts = new Set(JSON.parse(localStorage.getItem('sc_dismissed_pickup_delay_alerts') || '[]'));
+let pickupDelayPollInFlight = false;
 
 const ORDER_MODE_CONFIG = {
   unassigned: {
@@ -1064,6 +1086,7 @@ function enterApp() {
   bindAppEvents();
   loadDrivers();
   startAutoRefresh();
+  startPickupDelayMonitor();
   refreshOrderStatsBackground({ force: false });
   startOrderStatsRefresh();
 }
@@ -1071,6 +1094,7 @@ function enterApp() {
 function logout() {
   stopAutoRefresh();
   stopOrderStatsRefresh();
+  stopPickupDelayMonitor();
   Session.clear();
   document.getElementById('password').value = '';
   document.getElementById('errorMsg').classList.remove('show');
@@ -1725,10 +1749,23 @@ function selectedRegionLabel() {
   return ids.map(regionNameFromId).join(', ');
 }
 
-function setStatus(msg, kind) {
+function setStatus(msg, kind, detail) {
   const el = document.getElementById('statusMsg');
-  el.textContent = msg;
+  if (!el) return;
+  if (!msg) {
+    el.textContent = '';
+    el.className = 'status-msg';
+    el.removeAttribute('title');
+    return;
+  }
   el.className = 'status-msg ' + (kind || '');
+  if (detail) {
+    el.innerHTML = `<span class="status-inline"><span>${escapeHtml(msg)}</span><span class="info-tip" title="${escapeHtml(detail)}" aria-label="More driver load details">i</span></span>`;
+    el.title = detail;
+  } else {
+    el.textContent = msg;
+    el.removeAttribute('title');
+  }
 }
 
 function classify(p) {
@@ -1760,9 +1797,11 @@ function getDriverCohorts(p) {
 function hasCateringCohort(p) {
   return getDriverCohorts(p).some(c => /cater/i.test(String(c)));
 }
-function driverCarIcon(cls, assignable, tried) {
+function driverCarIcon(cls, assignable, tried, pickupDelayAlert) {
   const stateClass = tried ? 'tried' : cls;
-  const html = `<div class="driver-car-marker ${stateClass}${assignable ? ' assignable' : ''}" title="${tried ? 'tried for selected order' : cls}">
+  const alertClass = pickupDelayAlert ? ' pickup-delay-alert' : '';
+  const title = pickupDelayAlert ? `Pickup delay: ${pickupDelayAlert.message || 'Order is still being prepared'}` : (tried ? 'tried for selected order' : cls);
+  const html = `<div class="driver-car-marker ${stateClass}${assignable ? ' assignable' : ''}${alertClass}" title="${escapeHtml(title)}">
     <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5.25 11.25 6.7 6.9A3 3 0 0 1 9.55 4.8h4.9a3 3 0 0 1 2.85 2.1l1.45 4.35A2.75 2.75 0 0 1 21 13.95v3.3a.95.95 0 0 1-.95.95h-1.1a1.7 1.7 0 0 1-3.4 0h-7.1a1.7 1.7 0 0 1-3.4 0h-1.1A.95.95 0 0 1 3 17.25v-3.3c0-1.2.78-2.25 2.25-2.7Zm2.95-.45h7.6l-1.05-3.15a.9.9 0 0 0-.86-.63H10.1a.9.9 0 0 0-.86.63L8.2 10.8Zm-.55 4.65a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5Zm8.7 0a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5Z"/></svg>
   </div>`;
   return L.divIcon({ className: '', html, iconSize: [30, 30], iconAnchor: [15, 15], popupAnchor: [0, -14], tooltipAnchor: [0, -14] });
@@ -2118,6 +2157,134 @@ function scheduledPanelHtml(items, title, note, isConflict = false, limit = 3) {
     </div>`;
 }
 
+
+function pickupDelayDismissKey(alert) {
+  if (!alert) return '';
+  return `${alert.orderId || ''}:${alert.eventId || alert.eventDateTime || alert.message || ''}`;
+}
+function isPickupDelayDismissed(alert) {
+  const key = pickupDelayDismissKey(alert);
+  return !!key && dismissedPickupDelayAlerts.has(key);
+}
+function saveDismissedPickupDelayAlerts() {
+  const values = Array.from(dismissedPickupDelayAlerts).slice(-200);
+  dismissedPickupDelayAlerts.clear();
+  values.forEach(v => dismissedPickupDelayAlerts.add(v));
+  localStorage.setItem('sc_dismissed_pickup_delay_alerts', JSON.stringify(values));
+}
+function dismissPickupDelayAlert(orderId) {
+  const alert = pickupDelayAlertsByOrder.get(String(orderId || ''));
+  if (alert) {
+    const key = pickupDelayDismissKey(alert);
+    if (key) dismissedPickupDelayAlerts.add(key);
+    saveDismissedPickupDelayAlerts();
+  }
+  pickupDelayAlertsByOrder.delete(String(orderId || ''));
+  rebuildMarkers();
+  renderOrdersList();
+  setOrdersStatus(`Pickup delay alert dismissed for Order ${orderId}.`, 'info');
+}
+function getActivePickupDelayAlertForOrder(orderId) {
+  const alert = pickupDelayAlertsByOrder.get(String(orderId || ''));
+  if (!alert || isPickupDelayDismissed(alert)) return null;
+  return alert;
+}
+function getActivePickupDelayAlertForDriver(driverId) {
+  const id = String(driverId || '').trim();
+  if (!id) return null;
+  for (const alert of pickupDelayAlertsByOrder.values()) {
+    if (String(alert.driverId || '').trim() === id && !isPickupDelayDismissed(alert)) return alert;
+  }
+  return null;
+}
+function confirmedOrdersForPickupDelayPolling() {
+  return allOrders.filter(o => isConfirmedOrderStatus(o) && (o.orderId || o.OrderId));
+}
+function syncPickupDelayAlertsToLoadedConfirmedOrders() {
+  const activeOrderIds = new Set(confirmedOrdersForPickupDelayPolling().map(o => String(o.orderId || o.OrderId)));
+  let changed = false;
+  for (const orderId of Array.from(pickupDelayAlertsByOrder.keys())) {
+    if (!activeOrderIds.has(String(orderId))) {
+      pickupDelayAlertsByOrder.delete(orderId);
+      changed = true;
+    }
+  }
+  return changed;
+}
+async function pollPickupDelayAlerts(opts = {}) {
+  if (pickupDelayPollInFlight || !Session.isValid() || !Session.userToken) return;
+  const orders = confirmedOrdersForPickupDelayPolling();
+  const orderIds = [...new Set(orders.map(o => String(o.orderId || o.OrderId || '').trim()).filter(Boolean))];
+  const cleared = syncPickupDelayAlertsToLoadedConfirmedOrders();
+  if (!orderIds.length) {
+    if (cleared) { rebuildMarkers(); renderOrdersList(); }
+    return;
+  }
+
+  pickupDelayPollInFlight = true;
+  try {
+    const params = new URLSearchParams({ orderIds: orderIds.join(',') });
+    const r = await fetch(`/api/order-events?${params.toString()}`, { headers: { 'X-Usertoken': Session.userToken, 'Accept': 'application/json' } });
+    const json = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(json.error || `Order events request failed (${r.status})`);
+
+    const nextAlerts = new Map();
+    const orderById = new Map(orders.map(o => [String(o.orderId || o.OrderId), o]));
+    (Array.isArray(json.alerts) ? json.alerts : []).forEach(alert => {
+      const orderId = String(alert.orderId || '').trim();
+      if (!orderId || !orderById.has(orderId)) return;
+      const order = orderById.get(orderId);
+      nextAlerts.set(orderId, {
+        ...alert,
+        driverId: alert.driverId || order.driverId || order.DriverId || '',
+        driverName: alert.driverName || order.driverName || order.carrierDriverName || '',
+        message: alert.exceptionalEvent || alert.message || 'Order is still being prepared'
+      });
+    });
+
+    let changed = false;
+    for (const orderId of orderIds) {
+      const existing = pickupDelayAlertsByOrder.get(orderId);
+      const next = nextAlerts.get(orderId);
+      if (next && !isPickupDelayDismissed(next)) {
+        if (JSON.stringify(existing || {}) !== JSON.stringify(next)) changed = true;
+        pickupDelayAlertsByOrder.set(orderId, next);
+      } else if (existing) {
+        pickupDelayAlertsByOrder.delete(orderId);
+        changed = true;
+      }
+    }
+    if (changed || opts.forceRender) {
+      rebuildMarkers();
+      renderOrdersList();
+    }
+  } catch (err) {
+    console.warn('pickup delay poll failed', err);
+  } finally {
+    pickupDelayPollInFlight = false;
+  }
+}
+function startPickupDelayMonitor() {
+  stopPickupDelayMonitor();
+  pollPickupDelayAlerts({ forceRender: false });
+  pickupDelayTimer = window.setInterval(() => pollPickupDelayAlerts(), 60 * 1000);
+}
+function stopPickupDelayMonitor() {
+  if (pickupDelayTimer) window.clearInterval(pickupDelayTimer);
+  pickupDelayTimer = null;
+  pickupDelayPollInFlight = false;
+}
+function pickupDelayPopupBlock(p) {
+  const alert = getActivePickupDelayAlertForDriver(driverIdValue(p));
+  if (!alert) return '';
+  return `<div class="pickup-delay-popup">
+    <div class="pickup-delay-popup-title">Pickup Delay</div>
+    <div>${escapeHtml(alert.message || 'Order is still being prepared')}</div>
+    <div style="margin-top:4px;color:#fde68a;">Order ${escapeHtml(alert.orderId || '')}${alert.eventDateTime ? ` · ${escapeHtml(fmtDateTime(alert.eventDateTime))}` : ''}</div>
+    <button type="button" class="pickup-delay-dismiss" data-pickup-delay-dismiss="${escapeHtml(alert.orderId || '')}">Dismiss Alert</button>
+  </div>`;
+}
+
 function buildPopup(p) {
   const cls = classify(p);
   const label = cls === 'on-job' ? 'On Job' : cls === 'online' ? 'Online' : 'Offline';
@@ -2129,6 +2296,7 @@ function buildPopup(p) {
   const selectedConflicts = conflictInfo.items;
   const hasConflict = selectedConflicts.length > 0 || conflictInfo.pending;
   const canOffer = selectedOrder && hasCateringCohort(p) && !hasConflict && selectedOrder.jobId && selectedOrder.orderId;
+  const pickupDelayAlert = getActivePickupDelayAlertForDriver(driverIdValue(p));
   const scheduledBlock = scheduledPanelHtml(
     scheduledNext24,
     'Scheduled',
@@ -2159,6 +2327,7 @@ function buildPopup(p) {
       <div class="popup-name">${escapeHtml(p.Driver_Name || 'Unknown')}
         <span class="popup-status ${cls}" style="margin-left:6px;">${label}</span>
         ${hasConflict ? '<span class="popup-status on-job" style="margin-left:4px;">Scheduled Conflict</span>' : ''}
+        ${pickupDelayAlert ? '<span class="popup-status on-job" style="margin-left:4px;">Pickup Delay</span>' : ''}
       </div>
       <div class="popup-row"><strong>ID</strong> <a class="popup-id popup-link" href="${driverProfileUrl(p.DriverId)}" target="_blank" rel="noopener noreferrer">${escapeHtml(p.DriverId)}</a></div>
       <div class="popup-row"><strong>Phone</strong> ${escapeHtml(p.Phone_Number || '—')}</div>
@@ -2167,6 +2336,7 @@ function buildPopup(p) {
       <div class="popup-row"><strong>Status</strong> ${escapeHtml(p.Driver_Status || '—')}</div>
       ${shouldShowRawCurrentOrderId(p) ? `<div class="popup-row"><strong>Order</strong> ${escapeHtml(driverCurrentOrderId(p))}</div>` : ''}
       ${currentOrderPanelHtml(p)}
+      ${pickupDelayPopupBlock(p)}
       <div class="popup-row"><strong>Last Seen</strong> ${escapeHtml(p.Last_Seen_Online || '—')}</div>
       ${score.acceptanceRate !== undefined ? `<div class="popup-row"><strong>Accept</strong> ${escapeHtml(score.acceptanceRate)}% &nbsp; <strong>Complete</strong> ${escapeHtml(score.completionRate)}%</div>` : ''}
       ${cohorts.length ? `<div class="popup-row"><strong>Cohorts</strong> ${escapeHtml(cohorts.join(', '))}</div>` : ''}
@@ -2218,11 +2388,12 @@ function rebuildMarkers() {
 
     const triedForSelected = selectedOrder && wasDriverTriedForOrder(selectedOrder.orderId, driverIdValue(p));
     const assignable = selectedAssignOrderId && hasCateringCohort(p) && !hasConflict && !triedForSelected;
-    const marker = L.marker([lat, lng], { icon: driverCarIcon(cls, assignable, triedForSelected) });
+    const pickupDelayAlert = getActivePickupDelayAlertForDriver(driverIdValue(p));
+    const marker = L.marker([lat, lng], { icon: driverCarIcon(cls, assignable, triedForSelected, pickupDelayAlert) });
     marker.driverProperties = p;
     marker.bindPopup(buildPopup(p));
     marker.on('popupopen', () => bindDriverPopupActions(marker));
-    marker.bindTooltip(`#${p.DriverId} · ${p.Driver_Name || ''}${triedForSelected ? ' · tried' : ''}${hasConflict ? ' · scheduled conflict' : ''}`, { direction: 'top', offset: [0, -6] });
+    marker.bindTooltip(`#${p.DriverId} · ${p.Driver_Name || ''}${triedForSelected ? ' · tried' : ''}${hasConflict ? ' · scheduled conflict' : ''}${pickupDelayAlert ? ' · pickup delay' : ''}`, { direction: 'top', offset: [0, -6] });
     allMarkers.push(marker);
     shown++;
   }
@@ -2490,6 +2661,7 @@ function clearOrders() {
   openFeeOrderId = null;
   lastFeeUpdate = null;
   orderMarkers = [];
+  pickupDelayAlertsByOrder.clear();
   if (orderLayer) orderLayer.clearLayers();
   if (routeLayer) routeLayer.clearLayers();
   if (currentJobLayer) currentJobLayer.clearLayers();
@@ -2655,12 +2827,14 @@ function renderOrdersList() {
     const assignedDriverName = o.driverName || o.carrierDriverName || '';
     const assignedDriverId = o.driverId || o.DriverId || '';
     const assignedDriverLabel = assignedDriverName || (assignedDriverId ? 'Assigned driver' : 'No assigned driver returned');
+    const pickupDelayAlert = getActivePickupDelayAlertForOrder(o.orderId);
+    const pickupDelayNote = pickupDelayAlert ? `<div class="pickup-delay-note"><span>⚠️</span><span><strong>Pickup Delay:</strong> ${escapeHtml(pickupDelayAlert.message || 'Order is still being prepared')}</span></div>` : '';
     const assignedDriverLine = assignedDriverId
       ? `<div class="order-driver-line"><span><strong>Assigned Driver:</strong> ${escapeHtml(assignedDriverLabel)}</span><a class="driver-id-link" href="${driverProfileUrl(assignedDriverId)}" target="_blank" rel="noopener noreferrer">#${escapeHtml(assignedDriverId)}</a></div>`
       : `<div class="order-driver-line"><span><strong>Assigned Driver:</strong> <span class="order-driver-empty">${escapeHtml(assignedDriverLabel)}</span></span></div>`;
     const feeStatus = justUpdated ? `<div class="v1-fee-status success"><i class="ti ti-circle-check" aria-hidden="true"></i><span>${escapeHtml(lastFeeUpdate.message || '')}</span></div>` : '';
     return `
-      <div class="order-card ${activeAssign ? 'active' : ''}" data-order-id="${escapeHtml(o.orderId)}">
+      <div class="order-card ${activeAssign ? 'active' : ''} ${pickupDelayAlert ? 'pickup-delay-alert' : ''}" data-order-id="${escapeHtml(o.orderId)}">
         <div class="v1-head">
           <div>
             <p class="v1-brand">${idx + 1}. ${escapeHtml(o.brandName || 'ezCater Order')}</p>
@@ -2695,6 +2869,7 @@ function renderOrdersList() {
         </div>
 
         ${assignedDriverLine}
+        ${pickupDelayNote}
 
         ${feeEditorOpen ? `
           <div class="v1-fee-editor">
@@ -2874,11 +3049,20 @@ function drawAssignedDriverProgressLine(order) {
   return line;
 }
 
+function scrollOrderCardIntoView(orderId) {
+  const list = document.getElementById('ordersList');
+  if (!list) return;
+  const card = list.querySelector(`.order-card[data-order-id="${CSS.escape(String(orderId || ''))}"]`);
+  if (!card) return;
+  card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
 function selectOrder(orderId, pan) {
   const o = allOrders.find(x => String(x.orderId) === String(orderId));
   if (!o) return;
 
   document.querySelectorAll('.order-card').forEach(c => c.classList.toggle('active', String(c.dataset.orderId) === String(orderId)));
+  scrollOrderCardIntoView(orderId);
   routeLayer.clearLayers();
 
   let orderLine = null;
@@ -2923,13 +3107,24 @@ function bindDriverPopupActions(marker) {
   setTimeout(() => {
     const root = marker.getPopup()?.getElement();
     const btn = root?.querySelector('.popup-assign-driver');
-    if (!btn || btn._bound) return;
-    btn._bound = true;
-    btn.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      sendOrderOfferWithDriver(btn.dataset.orderId, btn.dataset.driverId);
-    });
+    if (btn && !btn._bound) {
+      btn._bound = true;
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        sendOrderOfferWithDriver(btn.dataset.orderId, btn.dataset.driverId);
+      });
+    }
+    const dismissBtn = root?.querySelector('[data-pickup-delay-dismiss]');
+    if (dismissBtn && !dismissBtn._bound) {
+      dismissBtn._bound = true;
+      dismissBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dismissPickupDelayAlert(dismissBtn.dataset.pickupDelayDismiss);
+        try { marker.closePopup(); } catch (_) {}
+      });
+    }
   }, 0);
 }
 
@@ -3535,6 +3730,7 @@ async function searchOrdersByNumber() {
     mapOrders({ preserveView: false });
     renderOrdersList();
     rebuildMarkers();
+    pollPickupDelayAlerts({ forceRender: false });
 
     if (allOrders.length) {
       const status = allOrders[0]?.orderStatus ? ` · ${allOrders[0].orderStatus}` : '';
@@ -3566,7 +3762,7 @@ async function loadOrders(opts = {}) {
   const hours = currentOrderMode === 'scheduled' ? '24' : (document.getElementById('ordersWindow').value || '12');
   const regionIds = getSelectedRegionIds();
   if (!opts.quiet) {
-    setOrdersStatus(cfg.loading(), 'info');
+    setOrdersStatus('', '');
     setOrdersLoading(true);
   }
   document.getElementById('loadOrdersBtn').disabled = true;
@@ -3592,6 +3788,7 @@ async function loadOrders(opts = {}) {
     mapOrders({ preserveView: !!opts.preserveView });
     renderOrdersList();
     rebuildMarkers();
+    pollPickupDelayAlerts({ forceRender: false });
     const windowEnds = results.map(j => j.windowEnd).filter(Boolean).sort();
     const capLabel = windowEnds.length ? ` · no later than ${fmtDateTime(windowEnds[0])}` : '';
     const orderInfoDetail = cfg.info(allOrders.length, hours, capLabel, scheduledOrders.length);
@@ -3643,7 +3840,7 @@ async function loadDrivers(opts = {}) {
 
     ingestMergedDriverPayloads(payloads, { preserveView: !!opts.preserveView });
     if (allOrders.length) renderOrdersList();
-    if (!opts.quiet) setStatus(`Loaded ${allFeatures.length.toLocaleString()} drivers for ${selectedRegionLabel()} · stale offline drivers hidden`, 'success');
+    if (!opts.quiet) setStatus(`Loaded ${allFeatures.length.toLocaleString()} drivers`, 'success', `${selectedRegionLabel()} · stale offline drivers hidden`);
   } catch (e) {
     console.error(e);
     if (!opts.quiet) setStatus('Error: ' + e.message, 'error');
