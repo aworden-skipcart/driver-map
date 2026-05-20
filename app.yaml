@@ -1,6 +1,0 @@
-command: ['npm', 'run', 'start']
-env:
-  - name: SKIPCART_APPTOKEN
-    valueFrom: '72f303a7-f1f0-45a0-ad2b-e6db29328b1a'
-  - name: ALLOWED_DOMAINS
-    value: 'skipcart.com,7-11.com'
