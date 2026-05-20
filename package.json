@@ -2,13 +2,14 @@
   "name": "skipcart-driver-map",
   "version": "1.0.0",
   "private": true,
-  "description": "Gated map of Skipcart driver locations",
+  "type": "module",
   "engines": {
     "node": "20.x"
-  }
-}
-{
+  },
   "scripts": {
-    "start": "node src/index.js"
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
   }
 }
