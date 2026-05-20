@@ -3,4 +3,4 @@ env:
   - name: SKIPCART_APPTOKEN
     valueFrom: skipcart_apptoken
   - name: ALLOWED_DOMAINS
-    value: 'skipcart.com,7-eleven.com'
+    value: 'skipcart.com,7-11.com'
